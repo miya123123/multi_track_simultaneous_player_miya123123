@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>マルチトラック同時再生プレーヤー</title>
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #171a2b;
+      --panel-2: #1e2340;
+      --text: #f4f6ff;
+      --muted: #aab4d6;
+      --accent: #6aa6ff;
+      --accent-2: #8ed1a5;
+      --danger: #ff6a6a;
+      --border: #2a2f52;
+      --focus: #b4c6ff;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans JP, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(1200px 700px at 30% -10%, #1b2144, transparent),
+                  radial-gradient(1000px 500px at 120% 10%, #142238, transparent),
+                  var(--bg);
+    }
+    .container {
+      max-width: 1080px;
+      margin: 24px auto 80px;
+      padding: 0 16px;
+    }
+    header h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: .02em; }
+    header p { margin: 4px 0 16px; color: var(--muted); font-size: 13px; }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .stack { display: grid; gap: 12px; }
+
+    .drop {
+      border: 2px dashed #39406b;
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+      color: var(--muted);
+      transition: .15s ease;
+      background: rgba(255,255,255,.02);
+    }
+    .drop.dragover { border-color: var(--focus); background: rgba(180,198,255,.08); color: var(--text); }
+    .drop input[type=file] { display: none; }
+    .drop .hint { font-size: 12px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .row > * { flex: none; }
+    .spacer { flex: 1; }
+
+    button, .button {
+      appearance: none; border: 1px solid var(--border);
+      background: #1f2544; color: var(--text);
+      padding: 8px 12px; border-radius: 10px; cursor: pointer;
+      font-weight: 600; letter-spacing: .02em; font-size: 13px;
+      box-shadow: 0 5px 16px rgba(0,0,0,.2) inset, 0 1px 0 rgba(255,255,255,.06);
+      transition: transform .05s ease, background .15s ease, border-color .2s ease, box-shadow .2s ease;
+    }
+    button:hover { background: #252c57; }
+    button:active { transform: translateY(1px); }
+    button.primary { background: linear-gradient(180deg, #2a63ff, #2147c7); border-color: #3559d6; }
+    button.primary:hover { filter: brightness(1.05); }
+    button.ghost { background: transparent; }
+    button.danger { background: linear-gradient(180deg, #ff5555, #c73a3a); border-color: #ff6a6a55; }
+
+    .seg {
+      display: inline-flex; background: #131733; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    }
+    .seg button { border: 0; background: transparent; }
+    .seg button + button { border-left: 1px solid var(--border); }
+
+    label { font-size: 12px; color: var(--muted); }
+    .slider { display: inline-flex; align-items: center; gap: 8px; }
+    input[type=range] { width: 140px; accent-color: var(--accent); }
+    input[type=checkbox] { accent-color: var(--accent-2); }
+
+    .tracks { display: grid; gap: 8px; }
+    .track { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.02); }
+    .track .meta { display: flex; flex-direction: column; gap: 2px; }
+    .track .title { font-weight: 600; }
+    .track .sub { color: var(--muted); font-size: 12px; }
+    .track .ctrls { display: flex; gap: 10px; align-items: center; }
+    .empty { color: var(--muted); text-align: center; padding: 12px; border: 1px dashed #3a4068; border-radius: 10px; }
+
+    footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: center; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #1a1f3a; border: 1px solid var(--border); padding: 1px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="panel">
+      <h1>マルチトラック同時再生プレーヤー</h1>
+      <p>複数の音声ファイルを読み込み、同時に再生できます。ファイル選択またはドラッグ＆ドロップで読み込んでください。</p>
+      <div class="stack">
+        <div id="drop" class="drop">
+          <input id="file" type="file" accept="audio/*" multiple />
+          <div>
+            ここにファイルをドロップ、または
+            <label for="file" class="button">ファイルを選択</label>
+            <button id="pickFS" class="button ghost" title="復元（自動再現）対応で追加">復元対応で追加</button>
+            <button id="restoreBtn" class="button ghost" style="display:none" title="前回セッションのトラックを復元（権限が必要）">前回セッションを復元</button>
+          </div>
+          <div class="hint">対応例: mp3, wav, m4a, ogg など（ブラウザ対応に依存）。復元対応は対応ブラウザ（Chrome/Edge等）のみ。</div>
+        </div>
+
+        <div class="row">
+          <div class="seg" role="group" aria-label="再生制御">
+            <button id="playAll" class="primary" title="全トラックを現在位置から再生">再生</button>
+            <button id="pauseAll" title="全トラックを一時停止">一時停止</button>
+            <button id="stopAll" class="danger" title="全トラックを停止して先頭に戻す">停止</button>
+          </div>
+          <div class="slider">
+            <label for="masterVol">マスター</label>
+            <input id="masterVol" type="range" min="0" max="1" step="0.01" value="0.9" />
+          </div>
+          <label><input id="loopAll" type="checkbox" /> 全体ループ</label>
+          <label><input id="muteAll" type="checkbox" /> 全ミュート</label>
+          <div class="spacer"></div>
+          <button id="removeAll" class="danger" title="全トラックをすべて削除">全削除</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="panel" aria-label="トラック一覧">
+      <div class="tracks" id="tracks"></div>
+      <div id="empty" class="empty">トラックはまだありません。上のエリアから読み込んでください。</div>
+    </section>
+
+    <footer>
+      キーボード: <span class="kbd">Space</span> 再生/一時停止, <span class="kbd">S</span> 停止
+    </footer>
+  </div>
+
+  <script>
+    // シンプルな状態管理
+    const $ = (sel, el = document) => el.querySelector(sel);
+    const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+
+    const state = {
+      // HTMLAudio ベース（デフォルト）
+      tracks: [], // { id, source, handleId?, file, url, audio, muted, vol, duration, loop }
+      mutedAll: false,
+      masterVol: 0.9,
+      loopAll: false,
+      nextId: 1,
+      pendingRestore: [], // [{ id, vol, muted, loop, position }]
+      savedPlaying: false,
+    };
+
+    // IndexedDB（ファイルハンドル保存用）簡易ラッパ
+    const storage = {
+      db: null,
+      supported: 'indexedDB' in window,
+      async init() {
+        if (!this.supported) return;
+        try {
+          this.db = await new Promise((resolve, reject) => {
+            const req = indexedDB.open('multiAudio', 1);
+            req.onupgradeneeded = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains('handles')) {
+                db.createObjectStore('handles', { keyPath: 'id' });
+              }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+        } catch (e) { console.warn('IDB init failed', e); }
+      },
+      async putHandle(id, handle) {
+        if (!this.db) return;
+        return new Promise((resolve, reject) => {
+          const tx = this.db.transaction('handles', 'readwrite');
+          tx.objectStore('handles').put({ id, handle });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+      async getHandle(id) {
+        if (!this.db) return null;
+        return new Promise((resolve, reject) => {
+          const tx = this.db.transaction('handles', 'readonly');
+          const req = tx.objectStore('handles').get(id);
+          req.onsuccess = () => resolve(req.result ? req.result.handle : null);
+          req.onerror = () => reject(req.error);
+        });
+      },
+      async deleteHandle(id) {
+        if (!this.db) return;
+        return new Promise((resolve, reject) => {
+          const tx = this.db.transaction('handles', 'readwrite');
+          tx.objectStore('handles').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+    };
+
+    // 永続化（localStorage）
+    const SESSION_KEY = 'multiAudio.session';
+    let saveTimer = null;
+    function scheduleSave() {
+      if (saveTimer) return; // ざっくり抑制
+      saveTimer = setTimeout(() => { saveTimer = null; saveSession(); }, 500);
+    }
+    function saveSession() {
+      const sess = {
+        masterVol: state.masterVol,
+        mutedAll: state.mutedAll,
+        loopAll: state.loopAll,
+        nextId: state.nextId,
+        tracks: state.tracks.map(t => ({
+          id: t.id,
+          source: t.source || 'file',
+          handleId: t.source === 'handle' ? t.id : null,
+          name: t.file && t.file.name,
+          vol: t.vol,
+          muted: t.muted,
+          loop: t.loop,
+          position: Number.isFinite(t.audio.currentTime) ? t.audio.currentTime : 0,
+        })),
+        playing: state.tracks.some(t => !t.audio.paused),
+      };
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(sess));
+      } catch (e) { console.warn('saveSession failed', e); }
+    }
+    async function restoreSession() {
+      let raw = null;
+      try { raw = localStorage.getItem(SESSION_KEY); } catch {}
+      if (!raw) return;
+      let sess = null;
+      try { sess = JSON.parse(raw); } catch { return; }
+
+      if (typeof sess.masterVol === 'number') {
+        state.masterVol = sess.masterVol;
+        $('#masterVol').value = String(sess.masterVol);
+      }
+      state.mutedAll = !!sess.mutedAll;
+      state.loopAll = !!sess.loopAll;
+      state.nextId = Math.max(state.nextId, (sess.nextId || 1));
+      state.savedPlaying = !!sess.playing;
+
+      // 起動時は権限プロンプトを出さないように、ハンドルの復元は保留にする
+      state.pendingRestore = Array.isArray(sess.tracks)
+        ? sess.tracks.filter(it => it && it.source === 'handle').map(it => ({
+            id: it.id, vol: it.vol, muted: it.muted, loop: it.loop, position: it.position
+          }))
+        : [];
+      updateEmpty();
+      updateLoopAllUI();
+      updateRestoreUI();
+    }
+
+    function updateRestoreUI() {
+      const btn = $('#restoreBtn');
+      if (!btn) return;
+      btn.style.display = (storage.db && state.pendingRestore && state.pendingRestore.length) ? '' : 'none';
+    }
+
+    // 音量計算（HTMLAudioベース）
+    function applyTrackVolume(track) {
+      const v = (state.mutedAll || track.muted) ? 0 : (state.masterVol * track.vol);
+      // HTMLAudio の volume は [0,1]
+      track.audio.volume = Math.max(0, Math.min(1, v));
+    }
+
+    function formatTime(sec) {
+      if (!isFinite(sec)) return '--:--';
+      const s = Math.floor(sec % 60).toString().padStart(2, '0');
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateEmpty() {
+      $('#empty').style.display = state.tracks.length ? 'none' : 'block';
+    }
+
+    function addFiles(files) {
+      if (!files || !files.length) return;
+      [...files].forEach(file => addTrack(file));
+      updateEmpty();
+      scheduleSave();
+    }
+
+    async function addTrack(file, opts = {}) {
+      const url = URL.createObjectURL(file);
+      const id = Number.isFinite(opts.id) ? opts.id : state.nextId++;
+      if (id >= state.nextId) state.nextId = id + 1;
+      const audio = new Audio();
+      audio.src = url;
+      audio.preload = 'metadata';
+      // 入力ファイルは blob URL のため CORS 設定は不要
+      audio.loop = false;
+      // iOS Safari 対策
+      audio.playsInline = true;
+      audio.muted = false;
+
+      const track = { id, source: opts.source || 'file', file, url, audio,
+        muted: (Object.prototype.hasOwnProperty.call(opts, 'muted') ? !!opts.muted : !!state.mutedAll), vol: Number.isFinite(opts.vol) ? opts.vol : 1,
+        duration: NaN, loop: ('loop' in opts) ? !!opts.loop : state.loopAll };
+      track.audio.loop = track.loop;
+      state.tracks.push(track);
+
+      renderTrack(track);
+      updateMuteAllUI();
+
+      audio.addEventListener('loadedmetadata', () => {
+        track.duration = audio.duration;
+        const row = document.getElementById(`track-${id}`);
+        if (row) {
+          $('.sub .dur', row).textContent = formatTime(track.duration);
+          const p = $('.pos', row);
+          if (p) {
+            const d = track.duration;
+            p.max = String(Number.isFinite(d) && d > 0 ? d : 0);
+            p.disabled = !(Number.isFinite(d) && d > 0);
+            try { p.value = String(track.audio.currentTime || 0); } catch {}
+          }
+        }
+        if (Number.isFinite(opts.position)) {
+          try { track.audio.currentTime = Math.max(0, Math.min(track.duration || opts.position, opts.position)); } catch {}
+        }
+      });
+
+      // 初期音量適用
+      applyTrackVolume(track);
+
+      // セッション保存トリガ
+      ['play','pause','ended','timeupdate'].forEach(ev => audio.addEventListener(ev, scheduleSave));
+      scheduleSave();
+
+      return track;
+    }
+
+    async function restoreFromHandles() {
+      const items = state.pendingRestore.slice();
+      state.pendingRestore = [];
+      updateRestoreUI();
+      for (const it of items) {
+        try {
+          const handle = await storage.getHandle(it.id);
+          if (!handle) continue;
+          let perm = 'granted';
+          if (handle.queryPermission) {
+            try { perm = await handle.queryPermission({ mode: 'read' }); } catch {}
+          }
+          if (perm !== 'granted' && handle.requestPermission) {
+            try { perm = await handle.requestPermission({ mode: 'read' }); } catch {}
+          }
+          if (perm !== 'granted') continue;
+          const file = await handle.getFile();
+          await addTrack(file, {
+            id: it.id,
+            source: 'handle',
+            vol: it.vol,
+            muted: it.muted,
+            loop: it.loop,
+            position: it.position,
+          });
+        } catch (e) {
+          console.warn('restore track failed', e);
+        }
+      }
+      updateEmpty();
+      updateLoopAllUI();
+      updateMuteAllUI();
+      if (state.savedPlaying && state.tracks.length) {
+        try { await playAll(false); } catch {}
+      }
+    }
+
+    function removeTrack(id) {
+      const idx = state.tracks.findIndex(t => t.id === id);
+      if (idx === -1) return;
+      const t = state.tracks[idx];
+      try { t.audio.pause(); } catch {}
+      URL.revokeObjectURL(t.url);
+      state.tracks.splice(idx, 1);
+      const row = document.getElementById(`track-${id}`);
+      if (row && row.parentNode) row.parentNode.removeChild(row);
+      updateEmpty();
+      updateMuteAllUI();
+      // ハンドルも削除
+      if (t.source === 'handle') { storage.deleteHandle(id).catch(()=>{}); }
+      scheduleSave();
+    }
+
+    function renderTrack(track) {
+      const wrap = document.createElement('div');
+      wrap.className = 'track';
+      wrap.id = `track-${track.id}`;
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.innerHTML = `
+        <div class="title">${track.file.name}</div>
+        <div class="sub"><span class="dur">--:--</span></div>
+      `;
+
+      const ctrls = document.createElement('div');
+      ctrls.className = 'ctrls';
+      ctrls.innerHTML = `
+        <button class="play" title="このトラックのみプレビュー再生/一時停止">▶︎/⏸</button>
+        <label class="slider"><span>音量</span><input class="vol" type="range" min="0" max="1" step="0.01" value="1"/></label>
+        <label class="slider"><span>位置</span><input class="pos" type="range" min="0" max="0" step="0.01" value="0" disabled/></label>
+        <label><input class="mute" type="checkbox"/> ミュート</label>
+        <label><input class="loop" type="checkbox"/> ループ</label>
+        <button class="remove" title="このトラックを削除">削除</button>
+      `;
+
+      const timeBox = document.createElement('div');
+      timeBox.className = 'sub';
+      timeBox.textContent = '00:00';
+
+      wrap.appendChild(meta);
+      wrap.appendChild(ctrls);
+      wrap.appendChild(timeBox);
+      $('#tracks').appendChild(wrap);
+
+      // イベント: 各種コントロール
+      const btnPlay = $('.play', wrap);
+      const slider = $('.vol', wrap);
+      const pos = $('.pos', wrap);
+      const chkMute = $('.mute', wrap);
+      const chkLoop = $('.loop', wrap);
+      // 初期チェック反映
+      chkMute.checked = !!track.muted;
+      chkLoop.checked = track.loop;
+      const btnDel = $('.remove', wrap);
+
+      btnPlay.addEventListener('click', async () => {
+        if (track.audio.paused) {
+          try { await track.audio.play(); } catch (e) { console.warn(e); }
+        } else {
+          track.audio.pause();
+        }
+      });
+
+      slider.addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value);
+        track.vol = v;
+        applyTrackVolume(track);
+        scheduleSave();
+      });
+
+      // 再生位置スライダー（シーク）
+      let scrubbing = false;
+      if (pos) {
+        const endScrub = () => { scrubbing = false; };
+        pos.addEventListener('pointerdown', () => { scrubbing = true; });
+        pos.addEventListener('pointerup', endScrub);
+        pos.addEventListener('pointercancel', endScrub);
+        pos.addEventListener('blur', endScrub);
+        pos.addEventListener('input', (e) => {
+          const v = parseFloat(e.target.value) || 0;
+          try { track.audio.currentTime = Math.max(0, Math.min(track.duration || v, v)); } catch {}
+          scheduleSave();
+        });
+      }
+
+      chkMute.addEventListener('change', (e) => {
+        track.muted = !!e.target.checked;
+        // 先にマスター状態を更新（これにより state.mutedAll が最新になる）
+        updateMuteAllUI();
+        // 最新の state.mutedAll を踏まえて音量を再適用
+        applyTrackVolume(track);
+        scheduleSave();
+      });
+
+      chkLoop.addEventListener('change', (e) => {
+        track.loop = e.target.checked;
+        track.audio.loop = track.loop;
+        updateLoopAllUI();
+        scheduleSave();
+      });
+
+      btnDel.addEventListener('click', () => removeTrack(track.id));
+
+      // 時刻表示更新
+      const tick = () => {
+        if (!document.body.contains(wrap)) return;
+        timeBox.textContent = `${formatTime(track.audio.currentTime)} / ${formatTime(track.duration)}`;
+        // スライダー同期（ドラッグ中は同期しない）
+        if (pos && !scrubbing) {
+          const d = track.duration;
+          if (Number.isFinite(d) && d > 0) {
+            if (pos.max != String(d)) pos.max = String(d);
+            if (pos.disabled) pos.disabled = false;
+            try { pos.value = String(track.audio.currentTime || 0); } catch {}
+          }
+        }
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }
+
+    // 全体操作
+    async function playAll(fromZero = true) {
+      if (!state.tracks.length) return;
+      if (fromZero) state.tracks.forEach(t => { try { t.audio.currentTime = 0; } catch {} });
+      await Promise.all(state.tracks.map(async t => {
+        try { await t.audio.play(); } catch (e) { console.warn('play failed', e); }
+      }));
+    }
+
+    function pauseAll() {
+      state.tracks.forEach(t => { try { t.audio.pause(); } catch {} });
+    }
+
+    function stopAll() {
+      state.tracks.forEach(t => { try { t.audio.pause(); t.audio.currentTime = 0; } catch {} });
+    }
+
+    function updateMuteAllUI() {
+      const el = $('#muteAll');
+      if (!el) return;
+      if (!state.tracks.length) {
+        el.indeterminate = false;
+        el.checked = false;
+        state.mutedAll = false;
+        return;
+      }
+      const all = state.tracks.every(t => !!t.muted);
+      const any = state.tracks.some(t => !!t.muted);
+      el.indeterminate = any && !all;
+      el.checked = all;
+      state.mutedAll = all;
+    }
+
+    function setAllTrackMute(v) {
+      state.mutedAll = !!v;
+      state.tracks.forEach(t => {
+        t.muted = !!v;
+        applyTrackVolume(t);
+        const row = document.getElementById(`track-${t.id}`);
+        if (row) {
+          const chk = $('.mute', row);
+          if (chk) chk.checked = !!v;
+        }
+      });
+      updateMuteAllUI();
+      scheduleSave();
+    }
+
+    function removeAllTracks() {
+      if (!state.tracks.length) return;
+      const ok = confirm('全てのトラックを削除してもよろしいですか？');
+      if (!ok) return;
+      const items = state.tracks.slice();
+      for (const t of items) {
+        removeTrack(t.id);
+      }
+      updateEmpty();
+      scheduleSave();
+    }
+
+    function updateLoopAllUI() {
+      const el = $('#loopAll');
+      if (!el) return;
+      if (!state.tracks.length) {
+        el.indeterminate = false;
+        el.checked = state.loopAll = false;
+        return;
+      }
+      const all = state.tracks.every(t => !!t.audio.loop);
+      const any = state.tracks.some(t => !!t.audio.loop);
+      el.indeterminate = any && !all;
+      el.checked = all;
+      state.loopAll = all;
+    }
+
+    // UI バインド
+    $('#masterVol').addEventListener('input', (e) => {
+      state.masterVol = parseFloat(e.target.value);
+      state.tracks.forEach(applyTrackVolume);
+      scheduleSave();
+    });
+    $('#playAll').addEventListener('click', () => playAll(false));
+    $('#pauseAll').addEventListener('click', pauseAll);
+    $('#stopAll').addEventListener('click', stopAll);
+    $('#muteAll').addEventListener('change', (e) => {
+      setAllTrackMute(!!e.target.checked);
+    });
+    $('#removeAll').addEventListener('click', removeAllTracks);
+    $('#loopAll').addEventListener('change', (e) => {
+      const v = !!e.target.checked;
+      state.loopAll = v;
+      state.tracks.forEach(t => {
+        t.loop = v;
+        t.audio.loop = v;
+        const row = document.getElementById(`track-${t.id}`);
+        if (row) {
+          const chk = $('.loop', row);
+          if (chk) chk.checked = v;
+        }
+      });
+      updateLoopAllUI();
+      scheduleSave();
+    });
+
+    // ファイル入力
+    $('#file').addEventListener('change', (e) => addFiles(e.target.files));
+    // File System Access API での選択（復元対応）
+    async function pickWithHandles() {
+      if (!window.showOpenFilePicker) {
+        alert('お使いのブラウザは復元対応のファイル追加に未対応です。Chrome/Edge等をご利用ください。');
+        return;
+      }
+      try {
+        const handles = await window.showOpenFilePicker({
+          multiple: true,
+          types: [{ description: 'Audio', accept: { 'audio/*': ['.mp3','.wav','.m4a','.ogg','.flac','.aac'] } }]
+        });
+        for (const handle of handles) {
+          try {
+            if (handle.requestPermission) {
+              try { await handle.requestPermission({ mode: 'read' }); } catch {}
+            }
+            const file = await handle.getFile();
+            const track = await addTrack(file, { source: 'handle' });
+            await storage.putHandle(track.id, handle);
+          } catch (e) { console.warn('handle add failed', e); }
+        }
+        updateEmpty();
+        scheduleSave();
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; // ユーザーキャンセル
+        console.warn('pickWithHandles failed', e);
+      }
+    }
+    $('#pickFS').addEventListener('click', pickWithHandles);
+    $('#restoreBtn').addEventListener('click', restoreFromHandles);
+
+    // ドラッグ&ドロップ
+    const drop = $('#drop');
+    const prevent = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => drop.addEventListener(ev, prevent));
+    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, () => drop.classList.add('dragover')));
+    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove('dragover')));
+    drop.addEventListener('drop', (e) => {
+      const files = e.dataTransfer.files;
+      addFiles(files);
+    });
+
+    // キーボードショートカット
+    window.addEventListener('keydown', async (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        const anyPlaying = state.tracks.some(t => !t.audio.paused);
+        if (anyPlaying) pauseAll(); else playAll(false);
+      } else if (e.key.toLowerCase() === 's') {
+        stopAll();
+      }
+    });
+
+    // 初期表示
+    (async () => {
+      state.masterVol = parseFloat($('#masterVol').value || '0.9');
+      await storage.init();
+      updateEmpty();
+      updateLoopAllUI();
+      updateMuteAllUI();
+      await restoreSession();
+    })();
+  </script>
+</body>
+</html>
