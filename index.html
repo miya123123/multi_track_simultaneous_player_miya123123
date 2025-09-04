@@ -116,7 +116,7 @@
 
         <div class="row">
           <div class="seg" role="group" aria-label="再生制御">
-            <button id="playAll" class="primary" title="全トラックを現在位置から再生">再生</button>
+            <button id="playAll" class="primary" title="全トラックを現在位置から再生">全曲再生</button>
             <button id="pauseAll" title="全トラックを一時停止">一時停止</button>
             <button id="stopAll" class="danger" title="全トラックを停止して先頭に戻す">停止</button>
           </div>
@@ -138,7 +138,7 @@
     </section>
 
     <footer>
-      キーボード: <span class="kbd">Space</span> 再生/一時停止, <span class="kbd">S</span> 停止
+      キーボード: <span class="kbd">Space</span> 一時停止/再開, <span class="kbd">S</span> 停止
     </footer>
   </div>
 
@@ -156,6 +156,7 @@
       nextId: 1,
       pendingRestore: [], // [{ id, vol, muted, loop, position }]
       savedPlaying: false,
+      lastPlayingIds: [], // 直近の「一時停止」時に再生していたトラックID
     };
 
     // IndexedDB（ファイルハンドル保存用）簡易ラッパ
@@ -337,8 +338,11 @@
       // 初期音量適用
       applyTrackVolume(track);
 
-      // セッション保存トリガ
-      ['play','pause','ended','timeupdate'].forEach(ev => audio.addEventListener(ev, scheduleSave));
+      // セッション保存トリガ + 一時停止/再開UI同期
+      ['play','pause','ended','timeupdate'].forEach(ev => {
+        audio.addEventListener(ev, scheduleSave);
+        if (ev !== 'timeupdate') audio.addEventListener(ev, updatePauseResumeUI);
+      });
       scheduleSave();
 
       return track;
@@ -521,6 +525,9 @@
 
     function stopAll() {
       state.tracks.forEach(t => { try { t.audio.pause(); t.audio.currentTime = 0; } catch {} });
+      // 停止時は再開対象をリセット
+      state.lastPlayingIds = [];
+      updatePauseResumeUI();
     }
 
     function updateMuteAllUI() {
@@ -551,6 +558,40 @@
         }
       });
       updateMuteAllUI();
+      scheduleSave();
+    }
+
+    // 一時停止/再開ボタンの表示更新
+    function updatePauseResumeUI() {
+      const btn = $('#pauseAll');
+      if (!btn) return;
+      const anyPlaying = state.tracks.some(t => !t.audio.paused);
+      if (anyPlaying) {
+        btn.textContent = '一時停止';
+        btn.title = '全トラックを一時停止';
+      } else if (state.lastPlayingIds && state.lastPlayingIds.length) {
+        btn.textContent = '再開';
+        btn.title = '一時停止前に再生していたトラックのみ再開';
+      } else {
+        // どちらも該当しない場合は一時停止表示（無効ではないが実質何もしない）
+        btn.textContent = '一時停止';
+        btn.title = '全トラックを一時停止';
+      }
+    }
+
+    // 一時停止→再開対象の記録
+    function snapshotPlaying() {
+      state.lastPlayingIds = state.tracks.filter(t => !t.audio.paused).map(t => t.id);
+    }
+
+    // 再開（直近の一時停止時に再生していたトラックのみ）
+    async function resumeLast() {
+      if (!state.lastPlayingIds || !state.lastPlayingIds.length) return;
+      const targets = state.tracks.filter(t => state.lastPlayingIds.includes(t.id));
+      for (const t of targets) {
+        try { await t.audio.play(); } catch (e) { console.warn('resume play failed', e); }
+      }
+      updatePauseResumeUI();
       scheduleSave();
     }
 
@@ -587,8 +628,23 @@
       state.tracks.forEach(applyTrackVolume);
       scheduleSave();
     });
-    $('#playAll').addEventListener('click', () => playAll(false));
-    $('#pauseAll').addEventListener('click', pauseAll);
+    $('#playAll').addEventListener('click', async () => {
+      await playAll(false);
+      // 「全曲再生」後は一時停止表示に戻す
+      updatePauseResumeUI();
+    });
+    $('#pauseAll').addEventListener('click', async () => {
+      const anyPlaying = state.tracks.some(t => !t.audio.paused);
+      if (anyPlaying) {
+        // 一時停止し、再開対象を記録
+        snapshotPlaying();
+        pauseAll();
+      } else {
+        // 再開（直近の一時停止時のみ）
+        await resumeLast();
+      }
+      updatePauseResumeUI();
+    });
     $('#stopAll').addEventListener('click', stopAll);
     $('#muteAll').addEventListener('change', (e) => {
       setAllTrackMute(!!e.target.checked);
@@ -659,8 +715,16 @@
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
       if (e.code === 'Space') {
         e.preventDefault();
+        // Space は「一時停止/再開」専用
         const anyPlaying = state.tracks.some(t => !t.audio.paused);
-        if (anyPlaying) pauseAll(); else playAll(false);
+        if (anyPlaying) {
+          snapshotPlaying();
+          pauseAll();
+          updatePauseResumeUI();
+        } else if (state.lastPlayingIds && state.lastPlayingIds.length) {
+          await resumeLast();
+          updatePauseResumeUI();
+        }
       } else if (e.key.toLowerCase() === 's') {
         stopAll();
       }
@@ -674,6 +738,11 @@
       updateLoopAllUI();
       updateMuteAllUI();
       await restoreSession();
+      // 各トラックの再生/一時停止/終了でボタン表示を同期
+      state.tracks.forEach(t => {
+        ['play','pause','ended'].forEach(ev => t.audio.addEventListener(ev, updatePauseResumeUI));
+      });
+      updatePauseResumeUI();
     })();
   </script>
 </body>
