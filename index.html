@@ -93,6 +93,23 @@
     .track .ctrls { display: flex; gap: 10px; align-items: center; }
     .empty { color: var(--muted); text-align: center; padding: 12px; border: 1px dashed #3a4068; border-radius: 10px; }
 
+    /* 再生中トラックの視覚強調 */
+    .track.playing {
+      border-color: var(--focus);
+      background: rgba(180,198,255,.06);
+      box-shadow: 0 0 0 2px rgba(180,198,255,.12) inset;
+    }
+    /* 再生中インジケーター（タイトル左のイコライザー） */
+    .now-indicator { display: none; margin-right: 8px; }
+    .track.playing .now-indicator { display: inline-block; }
+    .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+    .eq span { width: 2px; height: 3px; background: var(--accent); opacity: .9; transform-origin: bottom; animation: eq 0.8s ease-in-out infinite; }
+    .eq span:nth-child(2) { animation-delay: .1s; }
+    .eq span:nth-child(3) { animation-delay: .2s; }
+    /* 非再生時はアニメ停止・控えめ表示（要素は残す） */
+    .track:not(.playing) .eq span { animation: none; opacity: .4; height: 3px; }
+    @keyframes eq { 0% { height: 3px; } 50% { height: 12px; } 100% { height: 3px; } }
+
     footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: center; }
     .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #1a1f3a; border: 1px solid var(--border); padding: 1px 6px; border-radius: 6px; }
   </style>
@@ -409,7 +426,12 @@
       const meta = document.createElement('div');
       meta.className = 'meta';
       meta.innerHTML = `
-        <div class="title">${track.file.name}</div>
+        <div class="title">
+          <span class="now-indicator" title="再生中" aria-hidden="true">
+            <span class="eq"><span></span><span></span><span></span></span>
+          </span>
+          ${track.file.name}
+        </div>
         <div class="sub"><span class="dur">--:--</span></div>
       `;
 
@@ -491,6 +513,14 @@
       });
 
       btnDel.addEventListener('click', () => removeTrack(track.id));
+
+      // 再生/停止に応じた行ハイライト
+      const updatePlayingClass = () => {
+        const isPlaying = !track.audio.paused && !track.audio.ended;
+        wrap.classList.toggle('playing', isPlaying);
+      };
+      ['play','pause','ended'].forEach(ev => track.audio.addEventListener(ev, updatePlayingClass));
+      updatePlayingClass();
 
       // 時刻表示更新
       const tick = () => {
