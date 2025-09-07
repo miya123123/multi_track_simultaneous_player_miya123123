@@ -30,7 +30,7 @@
 
 ## 使用技術
 ### 開発ツール
-- OpenAI Codex CLI（gpt-5 High）を用いてコードとREADMEを生成
+OpenAI Codex CLI（gpt-5 High）を用いてコードとREADMEを生成
 ### フロントエンド
 HTML5, CSS3, Vanilla JavaScript（ES6+）
 ### 永続化
