@@ -1,779 +1,1689 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>マルチトラック同時再生プレーヤー</title>
-  <style>
-    :root {
-      --bg: #0f1220;
-      --panel: #171a2b;
-      --panel-2: #1e2340;
-      --text: #f4f6ff;
-      --muted: #aab4d6;
-      --accent: #6aa6ff;
-      --accent-2: #8ed1a5;
-      --danger: #ff6a6a;
-      --border: #2a2f52;
-      --focus: #b4c6ff;
-    }
-    html, body { height: 100%; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans JP, Helvetica, Arial, sans-serif;
-      color: var(--text);
-      background: radial-gradient(1200px 700px at 30% -10%, #1b2144, transparent),
-                  radial-gradient(1000px 500px at 120% 10%, #142238, transparent),
-                  var(--bg);
-    }
-    .container {
-      max-width: 1080px;
-      margin: 24px auto 80px;
-      padding: 0 16px;
-    }
-    header h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: .02em; }
-    header p { margin: 4px 0 16px; color: var(--muted); font-size: 13px; }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>マルチトラック同時再生プレーヤー</title>
+    <style>
+      :root {
+        --bg: #0f1220;
+        --panel: #171a2b;
+        --panel-2: #1e2340;
+        --text: #f4f6ff;
+        --muted: #aab4d6;
+        --accent: #6aa6ff;
+        --accent-2: #8ed1a5;
+        --danger: #ff6a6a;
+        --border: #2a2f52;
+        --focus: #b4c6ff;
+        /* --track-title-width: 260px; */
+        /* --track-title-width: 350px; */
+        /* --track-title-width: 400px; */
+        --track-title-width: 450px;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Noto Sans JP,
+          Helvetica,
+          Arial,
+          sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(1200px 700px at 30% -10%, #1b2144, transparent),
+          radial-gradient(1000px 500px at 120% 10%, #142238, transparent),
+          var(--bg);
+      }
+      .container {
+        /* max-width: 1080px; */
+        /* max-width: 1280px; */
+        /* max-width: 1480px; */
+        /* max-width: 1300px; */
+        max-width: 1500px;
+        margin: 24px auto 80px;
+        padding: 0 16px;
+      }
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        letter-spacing: 0.02em;
+      }
+      header p {
+        margin: 4px 0 16px;
+        color: var(--muted);
+        font-size: 13px;
+      }
 
-    .panel {
-      background: linear-gradient(180deg, var(--panel), var(--panel-2));
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.25);
-    }
-    .stack { display: grid; gap: 12px; }
+      .panel {
+        background: linear-gradient(180deg, var(--panel), var(--panel-2));
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        /* margin: 24px; */
+        margin: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      }
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
 
-    .drop {
-      border: 2px dashed #39406b;
-      border-radius: 12px;
-      padding: 18px;
-      text-align: center;
-      color: var(--muted);
-      transition: .15s ease;
-      background: rgba(255,255,255,.02);
-    }
-    .drop.dragover { border-color: var(--focus); background: rgba(180,198,255,.08); color: var(--text); }
-    .drop input[type=file] { display: none; }
-    .drop .hint { font-size: 12px; }
-    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    .row > * { flex: none; }
-    .spacer { flex: 1; }
+      .drop {
+        border: 2px dashed #39406b;
+        border-radius: 12px;
+        padding: 18px;
+        text-align: center;
+        color: var(--muted);
+        transition: 0.15s ease;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .drop.dragover {
+        border-color: var(--focus);
+        background: rgba(180, 198, 255, 0.08);
+        color: var(--text);
+      }
+      .drop input[type="file"] {
+        display: none;
+      }
+      .drop .hint {
+        font-size: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .row > * {
+        flex: none;
+      }
+      .session-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .spacer {
+        flex: 1;
+      }
 
-    button, .button {
-      appearance: none; border: 1px solid var(--border);
-      background: #1f2544; color: var(--text);
-      padding: 8px 12px; border-radius: 10px; cursor: pointer;
-      font-weight: 600; letter-spacing: .02em; font-size: 13px;
-      box-shadow: 0 5px 16px rgba(0,0,0,.2) inset, 0 1px 0 rgba(255,255,255,.06);
-      transition: transform .05s ease, background .15s ease, border-color .2s ease, box-shadow .2s ease;
-    }
-    button:hover { background: #252c57; }
-    button:active { transform: translateY(1px); }
-    button.primary { background: linear-gradient(180deg, #2a63ff, #2147c7); border-color: #3559d6; }
-    button.primary:hover { filter: brightness(1.05); }
-    button.ghost { background: transparent; }
-    button.danger { background: linear-gradient(180deg, #ff5555, #c73a3a); border-color: #ff6a6a55; }
+      button,
+      .button {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: #1f2544;
+        color: var(--text);
+        padding: 8px 12px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        font-size: 13px;
+        box-shadow:
+          0 5px 16px rgba(0, 0, 0, 0.2) inset,
+          0 1px 0 rgba(255, 255, 255, 0.06);
+        transition:
+          transform 0.05s ease,
+          background 0.15s ease,
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      button:hover {
+        background: #252c57;
+      }
+      button:active {
+        transform: translateY(1px);
+      }
+      button.primary {
+        background: linear-gradient(180deg, #2a63ff, #2147c7);
+        border-color: #3559d6;
+      }
+      button.primary:hover {
+        filter: brightness(1.05);
+      }
+      button.ghost {
+        background: transparent;
+      }
+      button.danger {
+        background: linear-gradient(180deg, #ff5555, #c73a3a);
+        border-color: #ff6a6a55;
+      }
 
-    .seg {
-      display: inline-flex; background: #131733; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
-    }
-    .seg button { border: 0; background: transparent; }
-    .seg button + button { border-left: 1px solid var(--border); }
+      .seg {
+        display: inline-flex;
+        background: #131733;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        background: transparent;
+      }
+      .seg button + button {
+        border-left: 1px solid var(--border);
+      }
 
-    label { font-size: 12px; color: var(--muted); }
-    .slider { display: inline-flex; align-items: center; gap: 8px; }
-    input[type=range] { width: 140px; accent-color: var(--accent); }
-    input[type=checkbox] { accent-color: var(--accent-2); }
+      label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .slider {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      input[type="range"] {
+        width: 140px;
+        accent-color: var(--accent);
+      }
+      .track .vol,
+    /* .track .pos { width: 70px; } */
+    .track .pos {
+        width: 120px;
+      }
+      input[type="checkbox"] {
+        accent-color: var(--accent-2);
+      }
 
-    .tracks { display: grid; gap: 8px; }
-    .track { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.02); }
-    .track .meta { display: flex; flex-direction: column; gap: 2px; }
-    .track .title { font-weight: 600; }
-    .track .sub { color: var(--muted); font-size: 12px; }
-    .track .ctrls { display: flex; gap: 10px; align-items: center; }
-    .empty { color: var(--muted); text-align: center; padding: 12px; border: 1px dashed #3a4068; border-radius: 10px; }
+      .tracks {
+        display: grid;
+        gap: 8px;
+      }
+      .track {
+        display: grid;
+        grid-template-columns: var(--track-title-width) minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .track .meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        width: var(--track-title-width);
+        min-width: 0;
+        overflow: visible;
+      }
+      .track .title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        max-width: 100%;
+        white-space: nowrap;
+        position: relative;
+        overflow: visible;
+      }
+      /* .track .title-text { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } */
+      .track .title-text {
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+      }
+      /* .track .title-text { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: wrap; } */
+      .track .title::after {
+        content: attr(data-full);
+        position: absolute;
+        left: 0;
+        top: calc(100% + 6px);
+        background: rgba(21, 26, 58, 0.95);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 8px;
+        color: var(--text);
+        font-size: 12px;
+        white-space: nowrap;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+        opacity: 0;
+        transform: translateY(-4px);
+        transition:
+          opacity 0.15s ease,
+          transform 0.15s ease;
+        pointer-events: none;
+        z-index: 5;
+      }
+      .track .title:hover::after {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .track .sub {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .track .ctrls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: nowrap;
+        min-width: 0;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
 
-    /* 再生中トラックの視覚強調 */
-    .track.playing {
-      border-color: var(--focus);
-      background: rgba(180,198,255,.06);
-      box-shadow: 0 0 0 2px rgba(180,198,255,.12) inset;
-    }
-    /* 再生中インジケーター（タイトル左のイコライザー） */
-    .now-indicator { display: none; margin-right: 8px; }
-    .track.playing .now-indicator { display: inline-block; }
-    .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
-    .eq span { width: 2px; height: 3px; background: var(--accent); opacity: .9; transform-origin: bottom; animation: eq 0.8s ease-in-out infinite; }
-    .eq span:nth-child(2) { animation-delay: .1s; }
-    .eq span:nth-child(3) { animation-delay: .2s; }
-    /* 非再生時はアニメ停止・控えめ表示（要素は残す） */
-    .track:not(.playing) .eq span { animation: none; opacity: .4; height: 3px; }
-    @keyframes eq { 0% { height: 3px; } 50% { height: 12px; } 100% { height: 3px; } }
+      /* .track .ctrls .play { padding: 8px 18px; min-width: 96px; } */
+      .track .ctrls .play {
+        padding: 8px 18px;
+        min-width: 120px;
+      }
 
-    footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: center; }
-    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #1a1f3a; border: 1px solid var(--border); padding: 1px 6px; border-radius: 6px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header class="panel">
-      <h1>マルチトラック同時再生プレーヤー</h1>
-      <p>複数の音声ファイルを読み込み、同時に再生できます。ファイル選択またはドラッグ＆ドロップで読み込んでください。</p>
-      <div class="stack">
-        <div id="drop" class="drop">
-          <input id="file" type="file" accept="audio/*" multiple />
-          <div>
-            ここにファイルをドロップ、または
-            <label for="file" class="button">ファイルを選択</label>
-            <button id="pickFS" class="button ghost" title="復元（自動再現）対応で追加">復元対応で追加</button>
-            <button id="restoreBtn" class="button ghost" style="display:none" title="前回セッションのトラックを復元（権限が必要）">前回セッションを復元</button>
+      .track label,
+      .track button,
+      .track .slider span,
+      .track .reorder {
+        white-space: nowrap;
+      }
+      .track .ctrls::-webkit-scrollbar {
+        height: 6px;
+      }
+      .track .ctrls::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+      }
+      .track .time {
+        justify-self: end;
+        text-align: right;
+        white-space: nowrap;
+      }
+      .track .reorder {
+        display: flex;
+        /* gap: 3px; */
+        /* gap: 0px; */
+        gap: 1px;
+        align-items: center;
+      }
+      .track .reorder button {
+        padding: 4px 6px;
+        font-size: 12px;
+        line-height: 1;
+        min-width: 32px;
+      }
+      .empty {
+        color: var(--muted);
+        text-align: center;
+        padding: 12px;
+        border: 1px dashed #3a4068;
+        border-radius: 10px;
+      }
+
+      /* 再生中トラックの視覚強調 */
+      .track.playing {
+        border-color: var(--focus);
+        background: rgba(180, 198, 255, 0.06);
+        box-shadow: 0 0 0 2px rgba(180, 198, 255, 0.12) inset;
+      }
+      /* 再生中インジケーター（タイトル左のイコライザー） */
+      .now-indicator {
+        display: none;
+        margin-right: 8px;
+      }
+      .track.playing .now-indicator {
+        display: inline-block;
+      }
+      .eq {
+        display: inline-flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 12px;
+      }
+      .eq span {
+        width: 2px;
+        height: 3px;
+        background: var(--accent);
+        opacity: 0.9;
+        transform-origin: bottom;
+        animation: eq 0.8s ease-in-out infinite;
+      }
+      .eq span:nth-child(2) {
+        animation-delay: 0.1s;
+      }
+      .eq span:nth-child(3) {
+        animation-delay: 0.2s;
+      }
+      /* 非再生時はアニメ停止・控えめ表示（要素は残す） */
+      .track:not(.playing) .eq span {
+        animation: none;
+        opacity: 0.4;
+        height: 3px;
+      }
+      @keyframes eq {
+        0% {
+          height: 3px;
+        }
+        50% {
+          height: 12px;
+        }
+        100% {
+          height: 3px;
+        }
+      }
+
+      footer {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+      .kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: #1a1f3a;
+        border: 1px solid var(--border);
+        padding: 1px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="panel">
+        <h1>マルチトラック同時再生プレーヤー</h1>
+        <p>
+          複数の音声ファイルを読み込み、同時に再生できます。ファイル選択またはドラッグ＆ドロップで読み込んでください。
+        </p>
+        <div class="stack">
+          <div id="drop" class="drop">
+            <input id="file" type="file" accept="audio/*" multiple />
+            <div>
+              ここにファイルをドロップ、または
+              <label for="file" class="button">ファイルを選択</label>
+              <button
+                id="pickFS"
+                class="button ghost"
+                title="復元（自動再現）対応で追加"
+              >
+                復元対応で追加
+              </button>
+              <button
+                id="restoreBtn"
+                class="button ghost"
+                style="display: none"
+                title="前回セッションのトラックを復元（権限が必要）"
+              >
+                前回セッションを復元
+              </button>
+            </div>
+            <div class="hint">
+              対応例: mp3, wav, m4a, ogg
+              など（ブラウザ対応に依存）。復元対応は対応ブラウザ（Chrome/Edge等）のみ。
+            </div>
           </div>
-          <div class="hint">対応例: mp3, wav, m4a, ogg など（ブラウザ対応に依存）。復元対応は対応ブラウザ（Chrome/Edge等）のみ。</div>
+
+          <div class="row">
+            <div class="seg" role="group" aria-label="再生制御">
+              <button
+                id="playAll"
+                class="primary"
+                title="全トラックを現在位置から再生"
+              >
+                全曲再生
+              </button>
+              <button id="pauseAll" title="全トラックを一時停止">
+                一時停止
+              </button>
+              <button
+                id="stopAll"
+                class="danger"
+                title="全トラックを停止して先頭に戻す"
+              >
+                停止
+              </button>
+            </div>
+            <div class="session-controls">
+              <button
+                id="exportSession"
+                class="ghost"
+                title="現在のセッション情報をJSONとして保存"
+              >
+                セッション書き出し
+              </button>
+              <input
+                id="sessionImport"
+                type="file"
+                accept="application/json"
+                hidden
+              />
+              <label
+                for="sessionImport"
+                class="button"
+                title="エクスポートしたセッションJSONを読み込み"
+                >セッション読み込み</label
+              >
+            </div>
+            <div class="slider">
+              <label for="masterVol">マスター</label>
+              <input
+                id="masterVol"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value="0.9"
+              />
+            </div>
+            <label><input id="loopAll" type="checkbox" /> 全体ループ</label>
+            <label><input id="muteAll" type="checkbox" /> 全ミュート</label>
+            <label><input id="soloAll" type="checkbox" /> 全ソロ</label>
+            <div class="spacer"></div>
+            <button
+              id="removeAll"
+              class="danger"
+              title="全トラックをすべて削除"
+            >
+              全削除
+            </button>
+          </div>
         </div>
+      </header>
 
-        <div class="row">
-          <div class="seg" role="group" aria-label="再生制御">
-            <button id="playAll" class="primary" title="全トラックを現在位置から再生">全曲再生</button>
-            <button id="pauseAll" title="全トラックを一時停止">一時停止</button>
-            <button id="stopAll" class="danger" title="全トラックを停止して先頭に戻す">停止</button>
-          </div>
-          <div class="slider">
-            <label for="masterVol">マスター</label>
-            <input id="masterVol" type="range" min="0" max="1" step="0.01" value="0.9" />
-          </div>
-          <label><input id="loopAll" type="checkbox" /> 全体ループ</label>
-          <label><input id="muteAll" type="checkbox" /> 全ミュート</label>
-          <div class="spacer"></div>
-          <button id="removeAll" class="danger" title="全トラックをすべて削除">全削除</button>
+      <section class="panel" aria-label="トラック一覧">
+        <div class="tracks" id="tracks"></div>
+        <div id="empty" class="empty">
+          トラックはまだありません。上のエリアから読み込んでください。
         </div>
-      </div>
-    </header>
+      </section>
 
-    <section class="panel" aria-label="トラック一覧">
-      <div class="tracks" id="tracks"></div>
-      <div id="empty" class="empty">トラックはまだありません。上のエリアから読み込んでください。</div>
-    </section>
+      <footer>
+        キーボード: <span class="kbd">A</span> 全曲再生,
+        <span class="kbd">Space</span> 一時停止/再開,
+        <span class="kbd">S</span> 停止
+      </footer>
+    </div>
 
-    <footer>
-      キーボード: <span class="kbd">Space</span> 一時停止/再開, <span class="kbd">S</span> 停止
-    </footer>
-  </div>
+    <script>
+      // シンプルな状態管理
+      const $ = (sel, el = document) => el.querySelector(sel);
+      const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
 
-  <script>
-    // シンプルな状態管理
-    const $ = (sel, el = document) => el.querySelector(sel);
-    const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+      const state = {
+        // HTMLAudio ベース（デフォルト）
+        tracks: [], // { id, source, handleId?, file, url, audio, muted, vol, duration, loop, solo }
+        mutedAll: false,
+        soloAll: false,
+        masterVol: 0.9,
+        loopAll: false,
+        nextId: 1,
+        pendingRestore: [], // [{ id, vol, muted, loop, position }]
+        savedPlaying: false,
+        lastPlayingIds: [], // 直近の「一時停止」時に再生していたトラックID
+      };
 
-    const state = {
-      // HTMLAudio ベース（デフォルト）
-      tracks: [], // { id, source, handleId?, file, url, audio, muted, vol, duration, loop }
-      mutedAll: false,
-      masterVol: 0.9,
-      loopAll: false,
-      nextId: 1,
-      pendingRestore: [], // [{ id, vol, muted, loop, position }]
-      savedPlaying: false,
-      lastPlayingIds: [], // 直近の「一時停止」時に再生していたトラックID
-    };
-
-    // IndexedDB（ファイルハンドル保存用）簡易ラッパ
-    const storage = {
-      db: null,
-      supported: 'indexedDB' in window,
-      async init() {
-        if (!this.supported) return;
-        try {
-          this.db = await new Promise((resolve, reject) => {
-            const req = indexedDB.open('multiAudio', 1);
-            req.onupgradeneeded = () => {
-              const db = req.result;
-              if (!db.objectStoreNames.contains('handles')) {
-                db.createObjectStore('handles', { keyPath: 'id' });
-              }
-            };
-            req.onsuccess = () => resolve(req.result);
+      // IndexedDB（ファイルハンドル保存用）簡易ラッパ
+      const storage = {
+        db: null,
+        supported: "indexedDB" in window,
+        async init() {
+          if (!this.supported) return;
+          try {
+            this.db = await new Promise((resolve, reject) => {
+              const req = indexedDB.open("multiAudio", 1);
+              req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains("handles")) {
+                  db.createObjectStore("handles", { keyPath: "id" });
+                }
+              };
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => reject(req.error);
+            });
+          } catch (e) {
+            console.warn("IDB init failed", e);
+          }
+        },
+        async putHandle(id, handle) {
+          if (!this.db) return;
+          return new Promise((resolve, reject) => {
+            const tx = this.db.transaction("handles", "readwrite");
+            tx.objectStore("handles").put({ id, handle });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        },
+        async getHandle(id) {
+          if (!this.db) return null;
+          return new Promise((resolve, reject) => {
+            const tx = this.db.transaction("handles", "readonly");
+            const req = tx.objectStore("handles").get(id);
+            req.onsuccess = () =>
+              resolve(req.result ? req.result.handle : null);
             req.onerror = () => reject(req.error);
           });
-        } catch (e) { console.warn('IDB init failed', e); }
-      },
-      async putHandle(id, handle) {
-        if (!this.db) return;
-        return new Promise((resolve, reject) => {
-          const tx = this.db.transaction('handles', 'readwrite');
-          tx.objectStore('handles').put({ id, handle });
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
-      },
-      async getHandle(id) {
-        if (!this.db) return null;
-        return new Promise((resolve, reject) => {
-          const tx = this.db.transaction('handles', 'readonly');
-          const req = tx.objectStore('handles').get(id);
-          req.onsuccess = () => resolve(req.result ? req.result.handle : null);
-          req.onerror = () => reject(req.error);
-        });
-      },
-      async deleteHandle(id) {
-        if (!this.db) return;
-        return new Promise((resolve, reject) => {
-          const tx = this.db.transaction('handles', 'readwrite');
-          tx.objectStore('handles').delete(id);
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
-      }
-    };
-
-    // 永続化（localStorage）
-    const SESSION_KEY = 'multiAudio.session';
-    let saveTimer = null;
-    function scheduleSave() {
-      if (saveTimer) return; // ざっくり抑制
-      saveTimer = setTimeout(() => { saveTimer = null; saveSession(); }, 500);
-    }
-    function saveSession() {
-      const sess = {
-        masterVol: state.masterVol,
-        mutedAll: state.mutedAll,
-        loopAll: state.loopAll,
-        nextId: state.nextId,
-        tracks: state.tracks.map(t => ({
-          id: t.id,
-          source: t.source || 'file',
-          handleId: t.source === 'handle' ? t.id : null,
-          name: t.file && t.file.name,
-          vol: t.vol,
-          muted: t.muted,
-          loop: t.loop,
-          position: Number.isFinite(t.audio.currentTime) ? t.audio.currentTime : 0,
-        })),
-        playing: state.tracks.some(t => !t.audio.paused),
-      };
-      try {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(sess));
-      } catch (e) { console.warn('saveSession failed', e); }
-    }
-    async function restoreSession() {
-      let raw = null;
-      try { raw = localStorage.getItem(SESSION_KEY); } catch {}
-      if (!raw) return;
-      let sess = null;
-      try { sess = JSON.parse(raw); } catch { return; }
-
-      if (typeof sess.masterVol === 'number') {
-        state.masterVol = sess.masterVol;
-        $('#masterVol').value = String(sess.masterVol);
-      }
-      state.mutedAll = !!sess.mutedAll;
-      state.loopAll = !!sess.loopAll;
-      state.nextId = Math.max(state.nextId, (sess.nextId || 1));
-      state.savedPlaying = !!sess.playing;
-
-      // 起動時は権限プロンプトを出さないように、ハンドルの復元は保留にする
-      state.pendingRestore = Array.isArray(sess.tracks)
-        ? sess.tracks.filter(it => it && it.source === 'handle').map(it => ({
-            id: it.id, vol: it.vol, muted: it.muted, loop: it.loop, position: it.position
-          }))
-        : [];
-      updateEmpty();
-      updateLoopAllUI();
-      updateRestoreUI();
-    }
-
-    function updateRestoreUI() {
-      const btn = $('#restoreBtn');
-      if (!btn) return;
-      btn.style.display = (storage.db && state.pendingRestore && state.pendingRestore.length) ? '' : 'none';
-    }
-
-    // 音量計算（HTMLAudioベース）
-    function applyTrackVolume(track) {
-      const v = (state.mutedAll || track.muted) ? 0 : (state.masterVol * track.vol);
-      // HTMLAudio の volume は [0,1]
-      track.audio.volume = Math.max(0, Math.min(1, v));
-    }
-
-    function formatTime(sec) {
-      if (!isFinite(sec)) return '--:--';
-      const s = Math.floor(sec % 60).toString().padStart(2, '0');
-      const m = Math.floor(sec / 60).toString().padStart(2, '0');
-      return `${m}:${s}`;
-    }
-
-    function updateEmpty() {
-      $('#empty').style.display = state.tracks.length ? 'none' : 'block';
-    }
-
-    function addFiles(files) {
-      if (!files || !files.length) return;
-      [...files].forEach(file => addTrack(file));
-      updateEmpty();
-      scheduleSave();
-    }
-
-    async function addTrack(file, opts = {}) {
-      const url = URL.createObjectURL(file);
-      const id = Number.isFinite(opts.id) ? opts.id : state.nextId++;
-      if (id >= state.nextId) state.nextId = id + 1;
-      const audio = new Audio();
-      audio.src = url;
-      audio.preload = 'metadata';
-      // 入力ファイルは blob URL のため CORS 設定は不要
-      audio.loop = false;
-      // iOS Safari 対策
-      audio.playsInline = true;
-      audio.muted = false;
-
-      const track = { id, source: opts.source || 'file', file, url, audio,
-        muted: (Object.prototype.hasOwnProperty.call(opts, 'muted') ? !!opts.muted : !!state.mutedAll), vol: Number.isFinite(opts.vol) ? opts.vol : 1,
-        duration: NaN, loop: ('loop' in opts) ? !!opts.loop : state.loopAll };
-      track.audio.loop = track.loop;
-      state.tracks.push(track);
-
-      renderTrack(track);
-      updateMuteAllUI();
-
-      audio.addEventListener('loadedmetadata', () => {
-        track.duration = audio.duration;
-        const row = document.getElementById(`track-${id}`);
-        if (row) {
-          $('.sub .dur', row).textContent = formatTime(track.duration);
-          const p = $('.pos', row);
-          if (p) {
-            const d = track.duration;
-            p.max = String(Number.isFinite(d) && d > 0 ? d : 0);
-            p.disabled = !(Number.isFinite(d) && d > 0);
-            try { p.value = String(track.audio.currentTime || 0); } catch {}
-          }
-        }
-        if (Number.isFinite(opts.position)) {
-          try { track.audio.currentTime = Math.max(0, Math.min(track.duration || opts.position, opts.position)); } catch {}
-        }
-      });
-
-      // 初期音量適用
-      applyTrackVolume(track);
-
-      // セッション保存トリガ + 一時停止/再開UI同期
-      ['play','pause','ended','timeupdate'].forEach(ev => {
-        audio.addEventListener(ev, scheduleSave);
-        if (ev !== 'timeupdate') audio.addEventListener(ev, updatePauseResumeUI);
-      });
-      scheduleSave();
-
-      return track;
-    }
-
-    async function restoreFromHandles() {
-      const items = state.pendingRestore.slice();
-      state.pendingRestore = [];
-      updateRestoreUI();
-      for (const it of items) {
-        try {
-          const handle = await storage.getHandle(it.id);
-          if (!handle) continue;
-          let perm = 'granted';
-          if (handle.queryPermission) {
-            try { perm = await handle.queryPermission({ mode: 'read' }); } catch {}
-          }
-          if (perm !== 'granted' && handle.requestPermission) {
-            try { perm = await handle.requestPermission({ mode: 'read' }); } catch {}
-          }
-          if (perm !== 'granted') continue;
-          const file = await handle.getFile();
-          await addTrack(file, {
-            id: it.id,
-            source: 'handle',
-            vol: it.vol,
-            muted: it.muted,
-            loop: it.loop,
-            position: it.position,
+        },
+        async deleteHandle(id) {
+          if (!this.db) return;
+          return new Promise((resolve, reject) => {
+            const tx = this.db.transaction("handles", "readwrite");
+            tx.objectStore("handles").delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
           });
+        },
+      };
+
+      // 永続化（localStorage）
+      const SESSION_KEY = "multiAudio.session";
+      let saveTimer = null;
+      function scheduleSave() {
+        if (saveTimer) return; // ざっくり抑制
+        saveTimer = setTimeout(() => {
+          saveTimer = null;
+          saveSession();
+        }, 500);
+      }
+      function sanitizeSessionSnapshot(raw) {
+        if (!raw || typeof raw !== "object") return null;
+        const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+        const snapshot = {
+          masterVol:
+            typeof raw.masterVol === "number" && isFinite(raw.masterVol)
+              ? clamp(raw.masterVol, 0, 1)
+              : state.masterVol,
+          mutedAll: !!raw.mutedAll,
+          loopAll: !!raw.loopAll,
+          nextId: 1,
+          tracks: [],
+          playing: !!raw.playing,
+          soloAll: !!raw.soloAll,
+        };
+
+        if (Array.isArray(raw.tracks)) {
+          snapshot.tracks = raw.tracks
+            .map((it) => {
+              if (!it || typeof it !== "object") return null;
+              const id = Number(it.id);
+              if (!Number.isFinite(id)) return null;
+              const source = it.source === "handle" ? "handle" : "file";
+              return {
+                id,
+                source,
+                handleId: source === "handle" ? id : null,
+                name: typeof it.name === "string" ? it.name : "",
+                vol: Number.isFinite(it.vol) ? clamp(it.vol, 0, 1) : 1,
+                muted: !!it.muted,
+                loop: !!it.loop,
+                solo: !!it.solo,
+                position:
+                  Number.isFinite(it.position) && it.position >= 0
+                    ? it.position
+                    : 0,
+              };
+            })
+            .filter(Boolean);
+        }
+
+        if (Number.isFinite(raw.nextId) && raw.nextId > 0) {
+          snapshot.nextId = Math.floor(raw.nextId);
+        } else {
+          const maxId = snapshot.tracks.reduce(
+            (max, t) => Math.max(max, t.id),
+            0,
+          );
+          snapshot.nextId = maxId + 1;
+        }
+
+        return snapshot;
+      }
+
+      function getSessionSnapshot() {
+        const raw = {
+          masterVol: state.masterVol,
+          mutedAll: state.mutedAll,
+          loopAll: state.loopAll,
+          nextId: state.nextId,
+          tracks: state.tracks.map((t) => ({
+            id: t.id,
+            source: t.source || "file",
+            handleId: t.source === "handle" ? t.id : null,
+            name: t.file && t.file.name,
+            vol: t.vol,
+            muted: t.muted,
+            loop: t.loop,
+            solo: !!t.solo,
+            position: Number.isFinite(t.audio.currentTime)
+              ? t.audio.currentTime
+              : 0,
+          })),
+          playing: state.tracks.some((t) => !t.audio.paused),
+          soloAll: state.soloAll,
+        };
+        return sanitizeSessionSnapshot(raw);
+      }
+
+      function persistSessionSnapshot(snapshot) {
+        if (!snapshot) return;
+        try {
+          localStorage.setItem(SESSION_KEY, JSON.stringify(snapshot));
         } catch (e) {
-          console.warn('restore track failed', e);
+          console.warn("saveSession failed", e);
         }
       }
-      updateEmpty();
-      updateLoopAllUI();
-      updateMuteAllUI();
-      if (state.savedPlaying && state.tracks.length) {
-        try { await playAll(false); } catch {}
+
+      function saveSession() {
+        persistSessionSnapshot(getSessionSnapshot());
       }
-    }
 
-    function removeTrack(id) {
-      const idx = state.tracks.findIndex(t => t.id === id);
-      if (idx === -1) return;
-      const t = state.tracks[idx];
-      try { t.audio.pause(); } catch {}
-      URL.revokeObjectURL(t.url);
-      state.tracks.splice(idx, 1);
-      const row = document.getElementById(`track-${id}`);
-      if (row && row.parentNode) row.parentNode.removeChild(row);
-      updateEmpty();
-      updateMuteAllUI();
-      // ハンドルも削除
-      if (t.source === 'handle') { storage.deleteHandle(id).catch(()=>{}); }
-      scheduleSave();
-    }
+      function applySessionSnapshot(snapshot, opts = {}) {
+        if (!snapshot) return false;
+        const { clearExisting = false, preserveHandleIds = null } = opts;
+        if (clearExisting) {
+          clearAllTracks({ preserveHandleIds });
+        }
 
-    function renderTrack(track) {
-      const wrap = document.createElement('div');
-      wrap.className = 'track';
-      wrap.id = `track-${track.id}`;
+        state.masterVol = snapshot.masterVol;
+        const masterVolEl = $("#masterVol");
+        if (masterVolEl) masterVolEl.value = String(snapshot.masterVol);
 
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-      meta.innerHTML = `
+        state.mutedAll = !!snapshot.mutedAll;
+        state.loopAll = !!snapshot.loopAll;
+        state.soloAll = !!snapshot.soloAll;
+        state.nextId = Number.isFinite(snapshot.nextId)
+          ? Math.max(1, Math.floor(snapshot.nextId))
+          : state.nextId;
+        state.savedPlaying = !!snapshot.playing;
+        state.lastPlayingIds = [];
+
+        state.pendingRestore = Array.isArray(snapshot.tracks)
+          ? snapshot.tracks
+              .filter((it) => it && it.source === "handle")
+              .map((it) => ({
+                id: it.id,
+                vol: it.vol,
+                muted: it.muted,
+                loop: it.loop,
+                solo: it.solo,
+                position: it.position,
+              }))
+          : [];
+
+        const loopAllEl = $("#loopAll");
+        if (loopAllEl) {
+          loopAllEl.indeterminate = false;
+          loopAllEl.checked = !!snapshot.loopAll;
+        }
+        const muteAllEl = $("#muteAll");
+        if (muteAllEl) {
+          muteAllEl.indeterminate = false;
+          muteAllEl.checked = !!snapshot.mutedAll;
+        }
+        const soloAllEl = $("#soloAll");
+        if (soloAllEl) {
+          soloAllEl.indeterminate = false;
+          soloAllEl.checked = !!snapshot.soloAll;
+        }
+
+        updateEmpty();
+        updateRestoreUI();
+        updatePauseResumeUI();
+        return true;
+      }
+
+      async function restoreSession() {
+        let raw = null;
+        try {
+          raw = localStorage.getItem(SESSION_KEY);
+        } catch {}
+        if (!raw) return;
+        let parsed = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          return;
+        }
+        const snapshot = sanitizeSessionSnapshot(parsed);
+        applySessionSnapshot(snapshot || null);
+      }
+
+      function updateRestoreUI() {
+        const btn = $("#restoreBtn");
+        if (!btn) return;
+        btn.style.display =
+          storage.db && state.pendingRestore && state.pendingRestore.length
+            ? ""
+            : "none";
+      }
+
+      // 音量計算（HTMLAudioベース）
+      function applyTrackVolume(track) {
+        const soloActive = state.tracks.some((t) => t.solo);
+        const shouldMute =
+          state.mutedAll || track.muted || (soloActive && !track.solo);
+        const v = shouldMute ? 0 : state.masterVol * track.vol;
+        // HTMLAudio の volume は [0,1]
+        track.audio.volume = Math.max(0, Math.min(1, v));
+      }
+
+      function isSoloModeActive() {
+        return state.tracks.some((t) => t.solo);
+      }
+
+      function canTrackPlay(track, soloActive = isSoloModeActive()) {
+        return !soloActive || track.solo;
+      }
+
+      function updateSoloRestrictions() {
+        const soloActive = isSoloModeActive();
+        state.tracks.forEach((track) => {
+          const allowed = canTrackPlay(track, soloActive);
+          if (!allowed && !track.audio.paused) {
+            try {
+              track.audio.pause();
+            } catch {}
+          }
+          const row = document.getElementById(`track-${track.id}`);
+          if (row) {
+            const btn = $(".play", row);
+            if (btn) {
+              const defaultTitle =
+                btn.dataset.defaultTitle ||
+                "このトラックのみプレビュー再生/一時停止";
+              btn.disabled = !allowed;
+              btn.title = allowed
+                ? defaultTitle
+                : "ソロ指定されたトラックのみ再生できます";
+            }
+          }
+        });
+        if (soloActive && state.lastPlayingIds && state.lastPlayingIds.length) {
+          state.lastPlayingIds = state.lastPlayingIds.filter((id) => {
+            const track = state.tracks.find((t) => t.id === id);
+            return track && track.solo;
+          });
+        }
+        updatePauseResumeUI();
+      }
+
+      function formatTime(sec) {
+        if (!isFinite(sec)) return "--:--";
+        const s = Math.floor(sec % 60)
+          .toString()
+          .padStart(2, "0");
+        const m = Math.floor(sec / 60)
+          .toString()
+          .padStart(2, "0");
+        return `${m}:${s}`;
+      }
+
+      function updateEmpty() {
+        $("#empty").style.display = state.tracks.length ? "none" : "block";
+      }
+
+      function refreshTrackOrderDOM() {
+        const list = $("#tracks");
+        if (!list) return;
+        state.tracks.forEach((t) => {
+          const row = document.getElementById(`track-${t.id}`);
+          if (row) list.appendChild(row);
+        });
+      }
+
+      function updateReorderButtons() {
+        state.tracks.forEach((track, index) => {
+          const row = document.getElementById(`track-${track.id}`);
+          if (!row) return;
+          const top = $(".move-top", row);
+          const up = $(".move-up", row);
+          const down = $(".move-down", row);
+          const bottom = $(".move-bottom", row);
+          const isFirst = index === 0;
+          const isLast = index === state.tracks.length - 1;
+          if (top) top.disabled = isFirst;
+          if (up) up.disabled = isFirst;
+          if (down) down.disabled = isLast;
+          if (bottom) bottom.disabled = isLast;
+        });
+      }
+
+      function reorderTrack(id, targetIndex) {
+        if (!state.tracks.length) return;
+        const idx = state.tracks.findIndex((t) => t.id === id);
+        if (idx === -1) return;
+        const maxIndex = state.tracks.length - 1;
+        const normalizedTarget = Math.max(0, Math.min(targetIndex, maxIndex));
+        if (normalizedTarget === idx) return;
+        const [track] = state.tracks.splice(idx, 1);
+        state.tracks.splice(normalizedTarget, 0, track);
+        refreshTrackOrderDOM();
+        updateReorderButtons();
+        scheduleSave();
+      }
+
+      function moveTrack(id, delta) {
+        if (!delta) return;
+        const idx = state.tracks.findIndex((t) => t.id === id);
+        if (idx === -1) return;
+        reorderTrack(id, idx + delta);
+      }
+
+      function moveTrackToTop(id) {
+        reorderTrack(id, 0);
+      }
+
+      function moveTrackToBottom(id) {
+        if (!state.tracks.length) return;
+        reorderTrack(id, state.tracks.length - 1);
+      }
+
+      function addFiles(files) {
+        if (!files || !files.length) return;
+        [...files].forEach((file) => addTrack(file));
+        updateEmpty();
+        scheduleSave();
+      }
+
+      async function addTrack(file, opts = {}) {
+        const url = URL.createObjectURL(file);
+        const id = Number.isFinite(opts.id) ? opts.id : state.nextId++;
+        if (id >= state.nextId) state.nextId = id + 1;
+        const audio = new Audio();
+        audio.src = url;
+        audio.preload = "metadata";
+        // 入力ファイルは blob URL のため CORS 設定は不要
+        audio.loop = false;
+        // iOS Safari 対策
+        audio.playsInline = true;
+        audio.muted = false;
+
+        const track = {
+          id,
+          source: opts.source || "file",
+          file,
+          url,
+          audio,
+          muted: Object.prototype.hasOwnProperty.call(opts, "muted")
+            ? !!opts.muted
+            : !!state.mutedAll,
+          vol: Number.isFinite(opts.vol) ? opts.vol : 1,
+          duration: NaN,
+          loop: "loop" in opts ? !!opts.loop : state.loopAll,
+          solo: "solo" in opts ? !!opts.solo : !!state.soloAll,
+        };
+        track.audio.loop = track.loop;
+        state.tracks.push(track);
+
+        renderTrack(track);
+        updateMuteAllUI();
+        updateSoloAllUI();
+
+        audio.addEventListener("loadedmetadata", () => {
+          track.duration = audio.duration;
+          const row = document.getElementById(`track-${id}`);
+          if (row) {
+            $(".sub .dur", row).textContent = formatTime(track.duration);
+            const p = $(".pos", row);
+            if (p) {
+              const d = track.duration;
+              p.max = String(Number.isFinite(d) && d > 0 ? d : 0);
+              p.disabled = !(Number.isFinite(d) && d > 0);
+              try {
+                p.value = String(track.audio.currentTime || 0);
+              } catch {}
+            }
+          }
+          if (Number.isFinite(opts.position)) {
+            try {
+              track.audio.currentTime = Math.max(
+                0,
+                Math.min(track.duration || opts.position, opts.position),
+              );
+            } catch {}
+          }
+        });
+
+        // ソロ状態反映のため全トラックの音量を再適用
+        state.tracks.forEach(applyTrackVolume);
+
+        // セッション保存トリガ + 一時停止/再開UI同期
+        ["play", "pause", "ended", "timeupdate"].forEach((ev) => {
+          audio.addEventListener(ev, scheduleSave);
+          if (ev !== "timeupdate")
+            audio.addEventListener(ev, updatePauseResumeUI);
+        });
+        scheduleSave();
+
+        return track;
+      }
+
+      async function restoreFromHandles() {
+        const items = state.pendingRestore.slice();
+        state.pendingRestore = [];
+        updateRestoreUI();
+        for (const it of items) {
+          try {
+            const handle = await storage.getHandle(it.id);
+            if (!handle) continue;
+            let perm = "granted";
+            if (handle.queryPermission) {
+              try {
+                perm = await handle.queryPermission({ mode: "read" });
+              } catch {}
+            }
+            if (perm !== "granted" && handle.requestPermission) {
+              try {
+                perm = await handle.requestPermission({ mode: "read" });
+              } catch {}
+            }
+            if (perm !== "granted") continue;
+            const file = await handle.getFile();
+            await addTrack(file, {
+              id: it.id,
+              source: "handle",
+              vol: it.vol,
+              muted: it.muted,
+              loop: it.loop,
+              solo: it.solo,
+              position: it.position,
+            });
+          } catch (e) {
+            console.warn("restore track failed", e);
+          }
+        }
+        updateEmpty();
+        updateLoopAllUI();
+        updateSoloAllUI();
+        updateMuteAllUI();
+        if (state.savedPlaying && state.tracks.length) {
+          try {
+            await playAll(false);
+          } catch {}
+        }
+      }
+
+      function clearAllTracks({ preserveHandleIds } = {}) {
+        const keep =
+          preserveHandleIds instanceof Set ? preserveHandleIds : null;
+        const current = state.tracks.slice();
+        state.tracks.length = 0;
+        current.forEach((track) => {
+          try {
+            track.audio.pause();
+          } catch {}
+          if (track.url) {
+            try {
+              URL.revokeObjectURL(track.url);
+            } catch {}
+          }
+          const row = document.getElementById(`track-${track.id}`);
+          if (row && row.parentNode) row.parentNode.removeChild(row);
+          if (track.source === "handle" && (!keep || !keep.has(track.id))) {
+            storage.deleteHandle(track.id).catch(() => {});
+          }
+        });
+        updateReorderButtons();
+      }
+
+      function removeTrack(id) {
+        const idx = state.tracks.findIndex((t) => t.id === id);
+        if (idx === -1) return;
+        const t = state.tracks[idx];
+        try {
+          t.audio.pause();
+        } catch {}
+        URL.revokeObjectURL(t.url);
+        state.tracks.splice(idx, 1);
+        const row = document.getElementById(`track-${id}`);
+        if (row && row.parentNode) row.parentNode.removeChild(row);
+        updateEmpty();
+        updateMuteAllUI();
+        updateSoloAllUI();
+        state.tracks.forEach(applyTrackVolume);
+        updateReorderButtons();
+        // ハンドルも削除
+        if (t.source === "handle") {
+          storage.deleteHandle(id).catch(() => {});
+        }
+        scheduleSave();
+      }
+
+      function renderTrack(track) {
+        const wrap = document.createElement("div");
+        wrap.className = "track";
+        wrap.id = `track-${track.id}`;
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.innerHTML = `
         <div class="title">
           <span class="now-indicator" title="再生中" aria-hidden="true">
             <span class="eq"><span></span><span></span><span></span></span>
           </span>
-          ${track.file.name}
+          <span class="title-text"></span>
         </div>
         <div class="sub"><span class="dur">--:--</span></div>
       `;
+        const titleEl = $(".title", meta);
+        const titleText = $(".title-text", meta);
+        const trackName =
+          track.file && track.file.name ? track.file.name : "トラック";
+        if (titleEl) {
+          titleEl.dataset.full = trackName;
+          titleEl.setAttribute("title", trackName);
+        }
+        if (titleText) {
+          titleText.textContent = trackName;
+        }
 
-      const ctrls = document.createElement('div');
-      ctrls.className = 'ctrls';
-      ctrls.innerHTML = `
+        const ctrls = document.createElement("div");
+        ctrls.className = "ctrls";
+        ctrls.innerHTML = `
+        <div class="reorder" role="group" aria-label="並び替え">
+          <button class="move-top" title="先頭に移動">先頭</button>
+          <button class="move-up" title="1つ上へ移動">↑</button>
+          <button class="move-down" title="1つ下へ移動">↓</button>
+          <button class="move-bottom" title="末尾に移動">末尾</button>
+        </div>
         <button class="play" title="このトラックのみプレビュー再生/一時停止">▶︎/⏸</button>
         <label class="slider"><span>音量</span><input class="vol" type="range" min="0" max="1" step="0.01" value="1"/></label>
         <label class="slider"><span>位置</span><input class="pos" type="range" min="0" max="0" step="0.01" value="0" disabled/></label>
+        <label><input class="solo" type="checkbox"/> ソロ</label>
         <label><input class="mute" type="checkbox"/> ミュート</label>
         <label><input class="loop" type="checkbox"/> ループ</label>
         <button class="remove" title="このトラックを削除">削除</button>
       `;
 
-      const timeBox = document.createElement('div');
-      timeBox.className = 'sub';
-      timeBox.textContent = '00:00';
+        const timeBox = document.createElement("div");
+        timeBox.className = "sub time";
+        timeBox.textContent = "00:00";
 
-      wrap.appendChild(meta);
-      wrap.appendChild(ctrls);
-      wrap.appendChild(timeBox);
-      $('#tracks').appendChild(wrap);
+        wrap.appendChild(meta);
+        wrap.appendChild(ctrls);
+        wrap.appendChild(timeBox);
+        $("#tracks").appendChild(wrap);
 
-      // イベント: 各種コントロール
-      const btnPlay = $('.play', wrap);
-      const slider = $('.vol', wrap);
-      const pos = $('.pos', wrap);
-      const chkMute = $('.mute', wrap);
-      const chkLoop = $('.loop', wrap);
-      // 初期チェック反映
-      chkMute.checked = !!track.muted;
-      chkLoop.checked = track.loop;
-      const btnDel = $('.remove', wrap);
+        // イベント: 各種コントロール
+        const btnPlay = $(".play", wrap);
+        const slider = $(".vol", wrap);
+        const pos = $(".pos", wrap);
+        const chkSolo = $(".solo", wrap);
+        const chkMute = $(".mute", wrap);
+        const chkLoop = $(".loop", wrap);
+        const btnTop = $(".move-top", wrap);
+        const btnUp = $(".move-up", wrap);
+        const btnDown = $(".move-down", wrap);
+        const btnBottom = $(".move-bottom", wrap);
+        // 初期チェック反映
+        if (chkSolo) chkSolo.checked = !!track.solo;
+        chkMute.checked = !!track.muted;
+        chkLoop.checked = track.loop;
+        const btnDel = $(".remove", wrap);
 
-      btnPlay.addEventListener('click', async () => {
-        if (track.audio.paused) {
-          try { await track.audio.play(); } catch (e) { console.warn(e); }
-        } else {
-          track.audio.pause();
+        if (slider) {
+          const initialVol = Number.isFinite(track.vol) ? track.vol : 1;
+          slider.value = String(initialVol);
         }
-      });
 
-      slider.addEventListener('input', (e) => {
-        const v = parseFloat(e.target.value);
-        track.vol = v;
-        applyTrackVolume(track);
-        scheduleSave();
-      });
+        if (btnPlay) btnPlay.dataset.defaultTitle = btnPlay.title;
+        btnPlay.addEventListener("click", async () => {
+          if (!canTrackPlay(track)) return;
+          if (track.audio.paused) {
+            try {
+              await track.audio.play();
+            } catch (e) {
+              console.warn(e);
+            }
+          } else {
+            track.audio.pause();
+          }
+        });
 
-      // 再生位置スライダー（シーク）
-      let scrubbing = false;
-      if (pos) {
-        const endScrub = () => { scrubbing = false; };
-        pos.addEventListener('pointerdown', () => { scrubbing = true; });
-        pos.addEventListener('pointerup', endScrub);
-        pos.addEventListener('pointercancel', endScrub);
-        pos.addEventListener('blur', endScrub);
-        pos.addEventListener('input', (e) => {
-          const v = parseFloat(e.target.value) || 0;
-          try { track.audio.currentTime = Math.max(0, Math.min(track.duration || v, v)); } catch {}
+        slider.addEventListener("input", (e) => {
+          const v = parseFloat(e.target.value);
+          track.vol = v;
+          applyTrackVolume(track);
           scheduleSave();
+        });
+
+        // 再生位置スライダー（シーク）
+        let scrubbing = false;
+        if (pos) {
+          const endScrub = () => {
+            scrubbing = false;
+          };
+          pos.addEventListener("pointerdown", () => {
+            scrubbing = true;
+          });
+          pos.addEventListener("pointerup", endScrub);
+          pos.addEventListener("pointercancel", endScrub);
+          pos.addEventListener("blur", endScrub);
+          pos.addEventListener("input", (e) => {
+            const v = parseFloat(e.target.value) || 0;
+            try {
+              track.audio.currentTime = Math.max(
+                0,
+                Math.min(track.duration || v, v),
+              );
+            } catch {}
+            scheduleSave();
+          });
+        }
+
+        if (chkSolo) {
+          chkSolo.addEventListener("change", (e) => {
+            track.solo = !!e.target.checked;
+            updateSoloAllUI();
+            state.tracks.forEach(applyTrackVolume);
+            scheduleSave();
+          });
+        }
+
+        chkMute.addEventListener("change", (e) => {
+          track.muted = !!e.target.checked;
+          // 先にマスター状態を更新（これにより state.mutedAll が最新になる）
+          updateMuteAllUI();
+          // 最新の state.mutedAll を踏まえて音量を再適用
+          applyTrackVolume(track);
+          scheduleSave();
+        });
+
+        chkLoop.addEventListener("change", (e) => {
+          track.loop = e.target.checked;
+          track.audio.loop = track.loop;
+          updateLoopAllUI();
+          scheduleSave();
+        });
+
+        btnDel.addEventListener("click", () => removeTrack(track.id));
+
+        if (btnTop)
+          btnTop.addEventListener("click", () => moveTrackToTop(track.id));
+        if (btnUp)
+          btnUp.addEventListener("click", () => moveTrack(track.id, -1));
+        if (btnDown)
+          btnDown.addEventListener("click", () => moveTrack(track.id, 1));
+        if (btnBottom)
+          btnBottom.addEventListener("click", () =>
+            moveTrackToBottom(track.id),
+          );
+
+        // 再生/停止に応じた行ハイライト
+        const updatePlayingClass = () => {
+          const isPlaying = !track.audio.paused && !track.audio.ended;
+          wrap.classList.toggle("playing", isPlaying);
+        };
+        ["play", "pause", "ended"].forEach((ev) =>
+          track.audio.addEventListener(ev, updatePlayingClass),
+        );
+        updatePlayingClass();
+
+        // 時刻表示更新
+        const tick = () => {
+          if (!document.body.contains(wrap)) return;
+          timeBox.textContent = `${formatTime(track.audio.currentTime)} / ${formatTime(track.duration)}`;
+          // スライダー同期（ドラッグ中は同期しない）
+          if (pos && !scrubbing) {
+            const d = track.duration;
+            if (Number.isFinite(d) && d > 0) {
+              if (pos.max != String(d)) pos.max = String(d);
+              if (pos.disabled) pos.disabled = false;
+              try {
+                pos.value = String(track.audio.currentTime || 0);
+              } catch {}
+            }
+          }
+          requestAnimationFrame(tick);
+        };
+        tick();
+
+        updateReorderButtons();
+      }
+
+      // 全体操作
+      async function playAll(fromZero = true) {
+        if (!state.tracks.length) return;
+        const soloActive = isSoloModeActive();
+        const targets = state.tracks.filter((t) => canTrackPlay(t, soloActive));
+        if (!targets.length) return;
+        if (fromZero)
+          targets.forEach((t) => {
+            try {
+              t.audio.currentTime = 0;
+            } catch {}
+          });
+        await Promise.all(
+          targets.map(async (t) => {
+            try {
+              await t.audio.play();
+            } catch (e) {
+              console.warn("play failed", e);
+            }
+          }),
+        );
+      }
+
+      function pauseAll() {
+        state.tracks.forEach((t) => {
+          try {
+            t.audio.pause();
+          } catch {}
         });
       }
 
-      chkMute.addEventListener('change', (e) => {
-        track.muted = !!e.target.checked;
-        // 先にマスター状態を更新（これにより state.mutedAll が最新になる）
+      function stopAll() {
+        state.tracks.forEach((t) => {
+          try {
+            t.audio.pause();
+            t.audio.currentTime = 0;
+          } catch {}
+        });
+        // 停止時は再開対象をリセット
+        state.lastPlayingIds = [];
+        updatePauseResumeUI();
+      }
+
+      function updateSoloAllUI() {
+        const el = $("#soloAll");
+        if (el) {
+          if (!state.tracks.length) {
+            el.indeterminate = false;
+            el.checked = false;
+            state.soloAll = false;
+          } else {
+            const all = state.tracks.every((t) => !!t.solo);
+            const any = state.tracks.some((t) => !!t.solo);
+            el.indeterminate = any && !all;
+            el.checked = all;
+            state.soloAll = all;
+          }
+        }
+        updateSoloRestrictions();
+      }
+
+      function updateMuteAllUI() {
+        const el = $("#muteAll");
+        if (!el) return;
+        if (!state.tracks.length) {
+          el.indeterminate = false;
+          el.checked = false;
+          state.mutedAll = false;
+          return;
+        }
+        const all = state.tracks.every((t) => !!t.muted);
+        const any = state.tracks.some((t) => !!t.muted);
+        el.indeterminate = any && !all;
+        el.checked = all;
+        state.mutedAll = all;
+      }
+
+      function setAllTrackMute(v) {
+        state.mutedAll = !!v;
+        state.tracks.forEach((t) => {
+          t.muted = !!v;
+          applyTrackVolume(t);
+          const row = document.getElementById(`track-${t.id}`);
+          if (row) {
+            const chk = $(".mute", row);
+            if (chk) chk.checked = !!v;
+          }
+        });
         updateMuteAllUI();
-        // 最新の state.mutedAll を踏まえて音量を再適用
-        applyTrackVolume(track);
+        scheduleSave();
+      }
+
+      function setAllTrackSolo(v) {
+        const next = !!v;
+        state.tracks.forEach((t) => {
+          t.solo = next;
+          const row = document.getElementById(`track-${t.id}`);
+          if (row) {
+            const chk = $(".solo", row);
+            if (chk) chk.checked = next;
+          }
+        });
+        updateSoloAllUI();
+        state.tracks.forEach(applyTrackVolume);
+        scheduleSave();
+      }
+
+      // 一時停止/再開ボタンの表示更新
+      function updatePauseResumeUI() {
+        const btn = $("#pauseAll");
+        if (!btn) return;
+        const anyPlaying = state.tracks.some((t) => !t.audio.paused);
+        if (anyPlaying) {
+          btn.textContent = "一時停止";
+          btn.title = "全トラックを一時停止";
+        } else if (state.lastPlayingIds && state.lastPlayingIds.length) {
+          btn.textContent = "再開";
+          btn.title = "一時停止前に再生していたトラックのみ再開";
+        } else {
+          // どちらも該当しない場合は一時停止表示（無効ではないが実質何もしない）
+          btn.textContent = "一時停止";
+          btn.title = "全トラックを一時停止";
+        }
+      }
+
+      // 一時停止→再開対象の記録
+      function snapshotPlaying() {
+        state.lastPlayingIds = state.tracks
+          .filter((t) => !t.audio.paused)
+          .map((t) => t.id);
+      }
+
+      // 再開（直近の一時停止時に再生していたトラックのみ）
+      async function resumeLast() {
+        if (!state.lastPlayingIds || !state.lastPlayingIds.length) return;
+        const soloActive = isSoloModeActive();
+        const targets = state.tracks.filter(
+          (t) =>
+            state.lastPlayingIds.includes(t.id) && canTrackPlay(t, soloActive),
+        );
+        state.lastPlayingIds = targets.map((t) => t.id);
+        if (!targets.length) {
+          updatePauseResumeUI();
+          scheduleSave();
+          return;
+        }
+        for (const t of targets) {
+          try {
+            await t.audio.play();
+          } catch (e) {
+            console.warn("resume play failed", e);
+          }
+        }
+        updatePauseResumeUI();
+        scheduleSave();
+      }
+
+      function removeAllTracks() {
+        if (!state.tracks.length) return;
+        const ok = confirm("全てのトラックを削除してもよろしいですか？");
+        if (!ok) return;
+        const items = state.tracks.slice();
+        for (const t of items) {
+          removeTrack(t.id);
+        }
+        updateEmpty();
+        scheduleSave();
+      }
+
+      function updateLoopAllUI() {
+        const el = $("#loopAll");
+        if (!el) return;
+        if (!state.tracks.length) {
+          el.indeterminate = false;
+          el.checked = state.loopAll = false;
+          return;
+        }
+        const all = state.tracks.every((t) => !!t.audio.loop);
+        const any = state.tracks.some((t) => !!t.audio.loop);
+        el.indeterminate = any && !all;
+        el.checked = all;
+        state.loopAll = all;
+      }
+
+      // UI バインド
+      function formatSessionTimestamp(date = new Date()) {
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+      }
+
+      function exportSessionToFile() {
+        const snapshot = getSessionSnapshot();
+        if (!snapshot) {
+          alert("書き出すセッション情報がありません。");
+          return;
+        }
+        const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `multi-audio-session-${formatSessionTimestamp()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+
+      async function importSessionFromFile(file) {
+        if (!file) return;
+        let snapshot = null;
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          snapshot = sanitizeSessionSnapshot(parsed);
+        } catch (e) {
+          console.warn("session import parse failed", e);
+          alert(
+            "セッション情報の読み込みに失敗しました。ファイル形式をご確認ください。",
+          );
+          return;
+        }
+
+        if (!snapshot) {
+          alert(
+            "セッション情報の読み込みに失敗しました。ファイル形式をご確認ください。",
+          );
+          return;
+        }
+
+        stopAll();
+
+        const handleIds = new Set(
+          snapshot.tracks.filter((t) => t.source === "handle").map((t) => t.id),
+        );
+        const preserveHandleIds = handleIds.size ? handleIds : null;
+        applySessionSnapshot(snapshot, {
+          clearExisting: true,
+          preserveHandleIds,
+        });
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        persistSessionSnapshot(snapshot);
+
+        const hasHandleTracks = snapshot.tracks.some(
+          (t) => t.source === "handle",
+        );
+        const hasFileTracks = snapshot.tracks.some(
+          (t) => t.source !== "handle",
+        );
+        if (hasHandleTracks && hasFileTracks) {
+          alert(
+            "セッション情報を読み込みました。「前回セッションを復元」ボタンからハンドルトラックを復元し、通常追加したトラックは手動で読み込み直してください。",
+          );
+        } else if (hasHandleTracks) {
+          alert(
+            "セッション情報を読み込みました。「前回セッションを復元」ボタンからトラックを復元してください。",
+          );
+        } else if (hasFileTracks) {
+          alert(
+            "セッション情報を読み込みました。音声ファイルは再度読み込み直してください。",
+          );
+        } else {
+          alert("セッション情報を読み込みました。");
+        }
+      }
+
+      $("#masterVol").addEventListener("input", (e) => {
+        state.masterVol = parseFloat(e.target.value);
+        state.tracks.forEach(applyTrackVolume);
         scheduleSave();
       });
-
-      chkLoop.addEventListener('change', (e) => {
-        track.loop = e.target.checked;
-        track.audio.loop = track.loop;
+      $("#playAll").addEventListener("click", async () => {
+        await playAll(false);
+        // 「全曲再生」後は一時停止表示に戻す
+        updatePauseResumeUI();
+      });
+      $("#pauseAll").addEventListener("click", async () => {
+        const anyPlaying = state.tracks.some((t) => !t.audio.paused);
+        if (anyPlaying) {
+          // 一時停止し、再開対象を記録
+          snapshotPlaying();
+          pauseAll();
+        } else {
+          // 再開（直近の一時停止時のみ）
+          await resumeLast();
+        }
+        updatePauseResumeUI();
+      });
+      $("#stopAll").addEventListener("click", stopAll);
+      $("#muteAll").addEventListener("change", (e) => {
+        setAllTrackMute(!!e.target.checked);
+      });
+      $("#soloAll").addEventListener("change", (e) => {
+        setAllTrackSolo(!!e.target.checked);
+      });
+      $("#removeAll").addEventListener("click", removeAllTracks);
+      $("#loopAll").addEventListener("change", (e) => {
+        const v = !!e.target.checked;
+        state.loopAll = v;
+        state.tracks.forEach((t) => {
+          t.loop = v;
+          t.audio.loop = v;
+          const row = document.getElementById(`track-${t.id}`);
+          if (row) {
+            const chk = $(".loop", row);
+            if (chk) chk.checked = v;
+          }
+        });
         updateLoopAllUI();
         scheduleSave();
       });
 
-      btnDel.addEventListener('click', () => removeTrack(track.id));
-
-      // 再生/停止に応じた行ハイライト
-      const updatePlayingClass = () => {
-        const isPlaying = !track.audio.paused && !track.audio.ended;
-        wrap.classList.toggle('playing', isPlaying);
-      };
-      ['play','pause','ended'].forEach(ev => track.audio.addEventListener(ev, updatePlayingClass));
-      updatePlayingClass();
-
-      // 時刻表示更新
-      const tick = () => {
-        if (!document.body.contains(wrap)) return;
-        timeBox.textContent = `${formatTime(track.audio.currentTime)} / ${formatTime(track.duration)}`;
-        // スライダー同期（ドラッグ中は同期しない）
-        if (pos && !scrubbing) {
-          const d = track.duration;
-          if (Number.isFinite(d) && d > 0) {
-            if (pos.max != String(d)) pos.max = String(d);
-            if (pos.disabled) pos.disabled = false;
-            try { pos.value = String(track.audio.currentTime || 0); } catch {}
-          }
+      // ファイル入力
+      $("#file").addEventListener("change", (e) => addFiles(e.target.files));
+      // File System Access API での選択（復元対応）
+      async function pickWithHandles() {
+        if (!window.showOpenFilePicker) {
+          alert(
+            "お使いのブラウザは復元対応のファイル追加に未対応です。Chrome/Edge等をご利用ください。",
+          );
+          return;
         }
-        requestAnimationFrame(tick);
-      };
-      tick();
-    }
-
-    // 全体操作
-    async function playAll(fromZero = true) {
-      if (!state.tracks.length) return;
-      if (fromZero) state.tracks.forEach(t => { try { t.audio.currentTime = 0; } catch {} });
-      await Promise.all(state.tracks.map(async t => {
-        try { await t.audio.play(); } catch (e) { console.warn('play failed', e); }
-      }));
-    }
-
-    function pauseAll() {
-      state.tracks.forEach(t => { try { t.audio.pause(); } catch {} });
-    }
-
-    function stopAll() {
-      state.tracks.forEach(t => { try { t.audio.pause(); t.audio.currentTime = 0; } catch {} });
-      // 停止時は再開対象をリセット
-      state.lastPlayingIds = [];
-      updatePauseResumeUI();
-    }
-
-    function updateMuteAllUI() {
-      const el = $('#muteAll');
-      if (!el) return;
-      if (!state.tracks.length) {
-        el.indeterminate = false;
-        el.checked = false;
-        state.mutedAll = false;
-        return;
-      }
-      const all = state.tracks.every(t => !!t.muted);
-      const any = state.tracks.some(t => !!t.muted);
-      el.indeterminate = any && !all;
-      el.checked = all;
-      state.mutedAll = all;
-    }
-
-    function setAllTrackMute(v) {
-      state.mutedAll = !!v;
-      state.tracks.forEach(t => {
-        t.muted = !!v;
-        applyTrackVolume(t);
-        const row = document.getElementById(`track-${t.id}`);
-        if (row) {
-          const chk = $('.mute', row);
-          if (chk) chk.checked = !!v;
-        }
-      });
-      updateMuteAllUI();
-      scheduleSave();
-    }
-
-    // 一時停止/再開ボタンの表示更新
-    function updatePauseResumeUI() {
-      const btn = $('#pauseAll');
-      if (!btn) return;
-      const anyPlaying = state.tracks.some(t => !t.audio.paused);
-      if (anyPlaying) {
-        btn.textContent = '一時停止';
-        btn.title = '全トラックを一時停止';
-      } else if (state.lastPlayingIds && state.lastPlayingIds.length) {
-        btn.textContent = '再開';
-        btn.title = '一時停止前に再生していたトラックのみ再開';
-      } else {
-        // どちらも該当しない場合は一時停止表示（無効ではないが実質何もしない）
-        btn.textContent = '一時停止';
-        btn.title = '全トラックを一時停止';
-      }
-    }
-
-    // 一時停止→再開対象の記録
-    function snapshotPlaying() {
-      state.lastPlayingIds = state.tracks.filter(t => !t.audio.paused).map(t => t.id);
-    }
-
-    // 再開（直近の一時停止時に再生していたトラックのみ）
-    async function resumeLast() {
-      if (!state.lastPlayingIds || !state.lastPlayingIds.length) return;
-      const targets = state.tracks.filter(t => state.lastPlayingIds.includes(t.id));
-      for (const t of targets) {
-        try { await t.audio.play(); } catch (e) { console.warn('resume play failed', e); }
-      }
-      updatePauseResumeUI();
-      scheduleSave();
-    }
-
-    function removeAllTracks() {
-      if (!state.tracks.length) return;
-      const ok = confirm('全てのトラックを削除してもよろしいですか？');
-      if (!ok) return;
-      const items = state.tracks.slice();
-      for (const t of items) {
-        removeTrack(t.id);
-      }
-      updateEmpty();
-      scheduleSave();
-    }
-
-    function updateLoopAllUI() {
-      const el = $('#loopAll');
-      if (!el) return;
-      if (!state.tracks.length) {
-        el.indeterminate = false;
-        el.checked = state.loopAll = false;
-        return;
-      }
-      const all = state.tracks.every(t => !!t.audio.loop);
-      const any = state.tracks.some(t => !!t.audio.loop);
-      el.indeterminate = any && !all;
-      el.checked = all;
-      state.loopAll = all;
-    }
-
-    // UI バインド
-    $('#masterVol').addEventListener('input', (e) => {
-      state.masterVol = parseFloat(e.target.value);
-      state.tracks.forEach(applyTrackVolume);
-      scheduleSave();
-    });
-    $('#playAll').addEventListener('click', async () => {
-      await playAll(false);
-      // 「全曲再生」後は一時停止表示に戻す
-      updatePauseResumeUI();
-    });
-    $('#pauseAll').addEventListener('click', async () => {
-      const anyPlaying = state.tracks.some(t => !t.audio.paused);
-      if (anyPlaying) {
-        // 一時停止し、再開対象を記録
-        snapshotPlaying();
-        pauseAll();
-      } else {
-        // 再開（直近の一時停止時のみ）
-        await resumeLast();
-      }
-      updatePauseResumeUI();
-    });
-    $('#stopAll').addEventListener('click', stopAll);
-    $('#muteAll').addEventListener('change', (e) => {
-      setAllTrackMute(!!e.target.checked);
-    });
-    $('#removeAll').addEventListener('click', removeAllTracks);
-    $('#loopAll').addEventListener('change', (e) => {
-      const v = !!e.target.checked;
-      state.loopAll = v;
-      state.tracks.forEach(t => {
-        t.loop = v;
-        t.audio.loop = v;
-        const row = document.getElementById(`track-${t.id}`);
-        if (row) {
-          const chk = $('.loop', row);
-          if (chk) chk.checked = v;
-        }
-      });
-      updateLoopAllUI();
-      scheduleSave();
-    });
-
-    // ファイル入力
-    $('#file').addEventListener('change', (e) => addFiles(e.target.files));
-    // File System Access API での選択（復元対応）
-    async function pickWithHandles() {
-      if (!window.showOpenFilePicker) {
-        alert('お使いのブラウザは復元対応のファイル追加に未対応です。Chrome/Edge等をご利用ください。');
-        return;
-      }
-      try {
-        const handles = await window.showOpenFilePicker({
-          multiple: true,
-          types: [{ description: 'Audio', accept: { 'audio/*': ['.mp3','.wav','.m4a','.ogg','.flac','.aac'] } }]
-        });
-        for (const handle of handles) {
-          try {
-            if (handle.requestPermission) {
-              try { await handle.requestPermission({ mode: 'read' }); } catch {}
+        try {
+          const handles = await window.showOpenFilePicker({
+            multiple: true,
+            types: [
+              {
+                description: "Audio",
+                accept: {
+                  "audio/*": [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"],
+                },
+              },
+            ],
+          });
+          for (const handle of handles) {
+            try {
+              if (handle.requestPermission) {
+                try {
+                  await handle.requestPermission({ mode: "read" });
+                } catch {}
+              }
+              const file = await handle.getFile();
+              const track = await addTrack(file, { source: "handle" });
+              await storage.putHandle(track.id, handle);
+            } catch (e) {
+              console.warn("handle add failed", e);
             }
-            const file = await handle.getFile();
-            const track = await addTrack(file, { source: 'handle' });
-            await storage.putHandle(track.id, handle);
-          } catch (e) { console.warn('handle add failed', e); }
+          }
+          updateEmpty();
+          scheduleSave();
+        } catch (e) {
+          if (e && e.name === "AbortError") return; // ユーザーキャンセル
+          console.warn("pickWithHandles failed", e);
         }
-        updateEmpty();
-        scheduleSave();
-      } catch (e) {
-        if (e && e.name === 'AbortError') return; // ユーザーキャンセル
-        console.warn('pickWithHandles failed', e);
       }
-    }
-    $('#pickFS').addEventListener('click', pickWithHandles);
-    $('#restoreBtn').addEventListener('click', restoreFromHandles);
-
-    // ドラッグ&ドロップ
-    const drop = $('#drop');
-    const prevent = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
-    ['dragenter','dragover','dragleave','drop'].forEach(ev => drop.addEventListener(ev, prevent));
-    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, () => drop.classList.add('dragover')));
-    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove('dragover')));
-    drop.addEventListener('drop', (e) => {
-      const files = e.dataTransfer.files;
-      addFiles(files);
-    });
-
-    // キーボードショートカット
-    window.addEventListener('keydown', async (e) => {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-      if (e.code === 'Space') {
-        e.preventDefault();
-        // Space は「一時停止/再開」専用
-        const anyPlaying = state.tracks.some(t => !t.audio.paused);
-        if (anyPlaying) {
-          snapshotPlaying();
-          pauseAll();
-          updatePauseResumeUI();
-        } else if (state.lastPlayingIds && state.lastPlayingIds.length) {
-          await resumeLast();
-          updatePauseResumeUI();
-        }
-      } else if (e.key.toLowerCase() === 's') {
-        stopAll();
+      $("#pickFS").addEventListener("click", pickWithHandles);
+      $("#restoreBtn").addEventListener("click", restoreFromHandles);
+      const exportBtn = $("#exportSession");
+      if (exportBtn) {
+        exportBtn.addEventListener("click", exportSessionToFile);
       }
-    });
+      const importInput = $("#sessionImport");
+      if (importInput) {
+        importInput.addEventListener("change", async (e) => {
+          const input = e.target;
+          const file = input && input.files && input.files[0];
+          await importSessionFromFile(file);
+          if (input) input.value = "";
+        });
+      }
 
-    // 初期表示
-    (async () => {
-      state.masterVol = parseFloat($('#masterVol').value || '0.9');
-      await storage.init();
-      updateEmpty();
-      updateLoopAllUI();
-      updateMuteAllUI();
-      await restoreSession();
-      // 各トラックの再生/一時停止/終了でボタン表示を同期
-      state.tracks.forEach(t => {
-        ['play','pause','ended'].forEach(ev => t.audio.addEventListener(ev, updatePauseResumeUI));
+      // ドラッグ&ドロップ
+      const drop = $("#drop");
+      const prevent = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+      };
+      ["dragenter", "dragover", "dragleave", "drop"].forEach((ev) =>
+        drop.addEventListener(ev, prevent),
+      );
+      ["dragenter", "dragover"].forEach((ev) =>
+        drop.addEventListener(ev, () => drop.classList.add("dragover")),
+      );
+      ["dragleave", "drop"].forEach((ev) =>
+        drop.addEventListener(ev, () => drop.classList.remove("dragover")),
+      );
+      drop.addEventListener("drop", (e) => {
+        const files = e.dataTransfer.files;
+        addFiles(files);
       });
-      updatePauseResumeUI();
-    })();
-  </script>
-</body>
+
+      // キーボードショートカット
+      window.addEventListener("keydown", async (e) => {
+        if (
+          e.target &&
+          (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+        )
+          return;
+        const key = typeof e.key === "string" ? e.key.toLowerCase() : "";
+        if (key === "a") {
+          e.preventDefault();
+          if (!state.tracks.length) return;
+          await playAll(false);
+          updatePauseResumeUI();
+        } else if (e.code === "Space") {
+          e.preventDefault();
+          const anyPlaying = state.tracks.some((t) => !t.audio.paused);
+          if (anyPlaying) {
+            snapshotPlaying();
+            pauseAll();
+            updatePauseResumeUI();
+          } else if (state.lastPlayingIds && state.lastPlayingIds.length) {
+            await resumeLast();
+          } else {
+            updatePauseResumeUI();
+          }
+        } else if (key === "s") {
+          stopAll();
+        }
+      });
+
+      // 初期表示
+      (async () => {
+        state.masterVol = parseFloat($("#masterVol").value || "0.9");
+        await storage.init();
+        updateEmpty();
+        updateLoopAllUI();
+        updateMuteAllUI();
+        updateSoloAllUI();
+        await restoreSession();
+        // 各トラックの再生/一時停止/終了でボタン表示を同期
+        state.tracks.forEach((t) => {
+          ["play", "pause", "ended"].forEach((ev) =>
+            t.audio.addEventListener(ev, updatePauseResumeUI),
+          );
+        });
+        updateSoloAllUI();
+        updatePauseResumeUI();
+      })();
+    </script>
+  </body>
 </html>
